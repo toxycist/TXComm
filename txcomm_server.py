@@ -124,6 +124,7 @@ class TXCommServer:
         self.running = False
         self.base_dir = Path(__file__).resolve().parent
         self.server_client_source_path = self.base_dir / "txcomm_client.py"
+        self.chatrooms_dir = self.base_dir / "chatrooms"
         self.update_build_dir = self.base_dir / "clients_updating"
         self.server_client_binary_path = self.update_build_dir / "dist" / "txcomm_client"
         self.events: List[str] = []
@@ -138,7 +139,7 @@ class TXCommServer:
         created = False
         with self.lock:
             if name not in self.chatrooms:
-                self.chatrooms[name] = Chatroom(name)
+                self.chatrooms[name] = Chatroom(name, data_dir=self.chatrooms_dir)
                 created = True
             chatroom = self.chatrooms[name]
         if created:
@@ -234,9 +235,8 @@ class TXCommServer:
     def list_chatrooms(self) -> List[str]:
         """Return known chatrooms from memory and persisted files."""
         names = set(self.chatrooms.keys())
-        data_dir = Path("./chatrooms")
-        if data_dir.exists():
-            for file_path in data_dir.glob("*.json"):
+        if self.chatrooms_dir.exists():
+            for file_path in self.chatrooms_dir.glob("*.json"):
                 names.add(file_path.stem)
         return sorted(names)
 
