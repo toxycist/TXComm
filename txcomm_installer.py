@@ -91,21 +91,21 @@ def prompt_settings():
     print()
 
     host = input(
-        f"  {Colors.GRAY}server address{Colors.RESET} "
-        f"{Colors.DARK_GRAY}[localhost]{Colors.RESET} : "
+        f"  {Colors.BRIGHT_TEAL}server address{Colors.RESET} "
+        f"{Colors.DARK_GRAY}[localhost]{Colors.RESET} {Colors.BRIGHT_TEAL}: {Colors.RESET}"
     ).strip() or "localhost"
     port_raw = input(
-        f"  {Colors.GRAY}server port{Colors.RESET}    "
-        f"{Colors.DARK_GRAY}[1717]{Colors.RESET}      : "
+        f"  {Colors.BRIGHT_TEAL}server port{Colors.RESET}    "
+        f"{Colors.DARK_GRAY}[1717]{Colors.RESET}      {Colors.BRIGHT_TEAL}: {Colors.RESET}"
     ).strip()
     default_install = str(Path.home() / "Desktop")
     install_raw = input(
-        f"  {Colors.GRAY}install dir{Colors.RESET}    "
-        f"{Colors.DARK_GRAY}[{default_install}]{Colors.RESET} : "
+        f"  {Colors.BRIGHT_TEAL}install dir{Colors.RESET}    "
+        f"{Colors.DARK_GRAY}[{default_install}]{Colors.RESET} {Colors.BRIGHT_TEAL}: {Colors.RESET}"
     ).strip()
     launch_now_raw = input(
-        f"  {Colors.GRAY}launch after install{Colors.RESET} "
-        f"{Colors.DARK_GRAY}[y/n]{Colors.RESET} : "
+        f"  {Colors.BRIGHT_TEAL}launch after install{Colors.RESET} "
+        f"{Colors.DARK_GRAY}[y/n]{Colors.RESET} {Colors.BRIGHT_TEAL}: {Colors.RESET}"
     ).strip().lower()
 
     try:
@@ -183,4 +183,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print()
+        print_error("Interrupted by user")
+        raise SystemExit(0)

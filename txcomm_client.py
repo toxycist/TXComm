@@ -536,4 +536,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print(f"\n{Colors.BRIGHT_RED}-- Interrupted by user --{Colors.RESET}")
+        subprocess.run(["stty", "sane"])
+        raise SystemExit(0)
