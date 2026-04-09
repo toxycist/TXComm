@@ -31,21 +31,38 @@ def clear_screen():
     os.system('clear' if os.name == 'posix' else 'cls')
 
 class Message:
-    def __init__(self, handle: str, text: str, timestamp: Optional[float] = None):
+    def __init__(
+        self,
+        handle: str,
+        text: str,
+        timestamp: Optional[float] = None,
+        color: str = "bright_teal",
+        is_system: bool = False
+    ):
         self.handle = handle
         self.text = text
         self.timestamp = timestamp or time.time()
+        self.color = color or "bright_teal"
+        self.is_system = is_system
 
     def to_dict(self):
         return {
             "handle": self.handle,
             "text": self.text,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
+            "color": self.color,
+            "is_system": self.is_system
         }
 
     @staticmethod
     def from_dict(d):
-        return Message(d["handle"], d["text"], d["timestamp"])
+        return Message(
+            d["handle"],
+            d["text"],
+            d["timestamp"],
+            d.get("color", "bright_teal"),
+            d.get("is_system", d.get("handle") == "SYSTEM")
+        )
 
 
 class Chatroom:
@@ -76,9 +93,9 @@ class Chatroom:
                 "created": self.file_path.stat().st_ctime if self.file_path.exists() else time.time()
             }, f, indent=2)
 
-    def add_message(self, handle: str, text: str) -> Message:
+    def add_message(self, handle: str, text: str, color: str = "bright_teal", is_system: bool = False) -> Message:
         """Add a message to the chatroom"""
-        msg = Message(handle, text)
+        msg = Message(handle, text, color=color, is_system=is_system)
         self.messages.append(msg)
         self.save_messages()
         return msg
@@ -112,6 +129,9 @@ class TXCommServer:
         self.events: List[str] = []
         self.max_events = 20
         self.server_version = self.get_latest_client_version()
+        self.allowed_user_colors = {
+            "red", "green", "blue", "yellow", "pink"
+        }
 
     def get_or_create_chatroom(self, name: str) -> Chatroom:
         """Get a chatroom or create it if it doesn't exist"""
@@ -124,6 +144,26 @@ class TXCommServer:
         if created:
             self.log_event(f"Created memo: {name}")
         return chatroom
+
+    def get_session_color(self, client_id: str) -> str:
+        with self.lock:
+            session = self.sessions.get(client_id)
+            if session and session.get("color"):
+                return session["color"]
+        return "blue"
+
+    def colorize_handle(self, handle: str, color_name: str) -> str:
+        color_map = {
+            "pink": '\033[38;5;213m',
+            "yellow": '\033[33m',
+            "green": '\033[32m',
+            "red": '\033[31m',
+            "blue": '\033[34m',
+        }
+        return f"{color_map.get(color_name, '\033[34m')}{handle}{Colors.BRIGHT_TEAL}"
+
+    def normalize_user_color(self, color_name: str) -> str:
+        return color_name if color_name in self.allowed_user_colors else "blue"
 
     def log_event(self, text: str):
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -182,11 +222,25 @@ class TXCommServer:
                 names.add(file_path.stem)
         return sorted(names)
 
-    def emit_system_event(self, chatroom_name: str, text: str, exclude_client_id: Optional[str] = None):
+    def emit_system_event(
+        self,
+        chatroom_name: str,
+        actor_handle: str,
+        actor_color: str,
+        text: str,
+        exclude_client_id: Optional[str] = None
+    ):
         """Persist and broadcast a system message inside a chatroom."""
         chatroom = self.get_or_create_chatroom(chatroom_name)
-        chatroom.add_message("SYSTEM", text)
-        self.broadcast_message(chatroom_name, "SYSTEM", text, exclude_client_id=exclude_client_id)
+        chatroom.add_message(actor_handle, text, actor_color, is_system=True)
+        self.broadcast_message(
+            chatroom_name,
+            actor_handle,
+            text,
+            sender_color=actor_color,
+            is_system=True,
+            exclude_client_id=exclude_client_id
+        )
 
     def get_latest_client_version(self) -> str:
         if not self.server_client_source_path.exists():
@@ -269,17 +323,18 @@ class TXCommServer:
         chatroom_name = None
 
         try:
-            # Wait for initial handshake: LOGIN|handle|version
+            # Wait for initial handshake: LOGIN|handle|version|color
             data = client_socket.recv(1024).decode('utf-8').strip()
-            parts = data.split('|', 2)
+            parts = data.split('|', 3)
 
-            if parts[0] != 'LOGIN' or len(parts) != 3 or not parts[1]:
+            if parts[0] != 'LOGIN' or len(parts) < 3 or len(parts) > 4 or not parts[1]:
                 client_socket.send(b"ERROR|Invalid login handshake\n")
                 self.log_event(f"Rejected invalid login from {client_id}")
                 return
 
             user_handle = parts[1]
             client_version = parts[2]
+            user_color = self.normalize_user_color(parts[3] if len(parts) == 4 and parts[3] else "blue")
             latest_version = self.get_latest_client_version()
 
             if self.is_version_mismatch(client_version, latest_version):
@@ -302,9 +357,9 @@ class TXCommServer:
 
             with self.lock:
                 self.active_connections[client_id] = client_socket
-                self.sessions[client_id] = {"handle": user_handle, "chatroom": None}
+                self.sessions[client_id] = {"handle": user_handle, "chatroom": None, "color": user_color}
             authenticated = True
-            self.log_event(f"{client_id} authenticated as {user_handle}")
+            self.log_event(f"{client_id} authenticated as {self.colorize_handle(user_handle, user_color)}")
 
             client_socket.send(f"READY|Logged in as {user_handle}. You are in the lobby.\n".encode('utf-8'))
 
@@ -335,10 +390,14 @@ class TXCommServer:
                             old_chatroom.remove_user(user_handle)
                         self.emit_system_event(
                             previous_chatroom,
+                            user_handle,
+                            user_color,
                             f"{user_handle} left the memo",
                             exclude_client_id=client_id
                         )
-                        self.log_event(f"{user_handle} left memo {previous_chatroom}")
+                        self.log_event(
+                            f"{self.colorize_handle(user_handle, user_color)} left memo {previous_chatroom}"
+                        )
 
                     chatroom = self.get_or_create_chatroom(requested_chatroom)
                     chatroom.add_user(user_handle)
@@ -351,10 +410,15 @@ class TXCommServer:
 
                     recent = chatroom.get_recent_messages(20)
                     for msg in recent:
-                        client_socket.send(f"MSG|{msg.handle}|{msg.text}|{msg.timestamp}\n".encode('utf-8'))
+                        system_bit = 1 if msg.is_system else 0
+                        client_socket.send(
+                            f"MSG|{msg.handle}|{msg.text}|{msg.timestamp}|{msg.color}|{system_bit}\n".encode('utf-8')
+                        )
                     client_socket.send(f"JOINED|{chatroom_name}\n".encode('utf-8'))
-                    self.emit_system_event(chatroom_name, f"{user_handle} joined the memo")
-                    self.log_event(f"{user_handle} joined memo {chatroom_name}")
+                    self.emit_system_event(chatroom_name, user_handle, user_color, f"{user_handle} joined the memo")
+                    self.log_event(
+                        f"{self.colorize_handle(user_handle, user_color)} joined memo {chatroom_name}"
+                    )
 
                 elif data == 'LEAVE':
                     active_chatroom = None
@@ -369,9 +433,11 @@ class TXCommServer:
                         if chatroom:
                             chatroom.remove_user(user_handle)
                         chatroom_name = None
-                        self.emit_system_event(active_chatroom, f"{user_handle} left the memo")
+                        self.emit_system_event(active_chatroom, user_handle, user_color, f"{user_handle} left the memo")
                         client_socket.send(b"LEFT|Lobby\n")
-                        self.log_event(f"{user_handle} returned to lobby from {active_chatroom}")
+                        self.log_event(
+                            f"{self.colorize_handle(user_handle, user_color)} returned to lobby from {active_chatroom}"
+                        )
                     else:
                         client_socket.send(b"INFO|You are already in the lobby\n")
 
@@ -393,10 +459,18 @@ class TXCommServer:
                         continue
 
                     chatroom = self.get_or_create_chatroom(active_chatroom)
-                    chatroom.add_message(user_handle, message_text)
-                    self.broadcast_message(active_chatroom, user_handle, message_text)
+                    chatroom.add_message(user_handle, message_text, user_color, is_system=False)
+                    self.broadcast_message(
+                        active_chatroom,
+                        user_handle,
+                        message_text,
+                        sender_color=user_color,
+                        is_system=False
+                    )
                     preview = message_text if len(message_text) <= 40 else f"{message_text[:37]}..."
-                    self.log_event(f"{user_handle}@{active_chatroom}: {preview}")
+                    self.log_event(
+                        f"{self.colorize_handle(user_handle, user_color)}@{active_chatroom}: {preview}"
+                    )
 
                 elif data == 'QUIT':
                     break
@@ -405,12 +479,15 @@ class TXCommServer:
 
         except Exception as e:
             if user_handle:
-                self.log_event(f"Error for {user_handle}({client_id}): {e}")
+                self.log_event(
+                    f"Error for {self.colorize_handle(user_handle, self.get_session_color(client_id))}({client_id}): {e}"
+                )
             else:
                 self.log_event(f"Error for {client_id}: {e}")
 
         finally:
             # Cleanup
+            disconnect_color = self.get_session_color(client_id)
             if user_handle:
                 active_chatroom = None
                 with self.lock:
@@ -421,7 +498,12 @@ class TXCommServer:
                 chatroom = self.chatrooms.get(active_chatroom) if active_chatroom else None
                 if chatroom:
                     chatroom.remove_user(user_handle)
-                    self.emit_system_event(active_chatroom, f"{user_handle} left the memo")
+                    user_color = "bright_teal"
+                    with self.lock:
+                        session = self.sessions.get(client_id)
+                        if session and session.get("color"):
+                            user_color = session["color"]
+                    self.emit_system_event(active_chatroom, user_handle, user_color, f"{user_handle} left the memo")
 
             with self.lock:
                 if client_id in self.active_connections:
@@ -435,11 +517,21 @@ class TXCommServer:
                 pass
 
             if authenticated and user_handle:
-                self.log_event(f"{user_handle} disconnected")
+                self.log_event(
+                    f"{self.colorize_handle(user_handle, disconnect_color)} disconnected"
+                )
             else:
                 self.log_event(f"{client_id} disconnected")
 
-    def broadcast_message(self, chatroom_name: str, sender_handle: str, text: str, exclude_client_id: Optional[str] = None):
+    def broadcast_message(
+        self,
+        chatroom_name: str,
+        sender_handle: str,
+        text: str,
+        sender_color: str = "bright_teal",
+        is_system: bool = False,
+        exclude_client_id: Optional[str] = None
+    ):
         """Broadcast a message to all clients in a chatroom"""
         with self.lock:
             connections_to_notify = [
@@ -451,7 +543,8 @@ class TXCommServer:
                 )
             ]
 
-        message = f"MSG|{sender_handle}|{text}|{time.time()}\n"
+        system_bit = 1 if is_system else 0
+        message = f"MSG|{sender_handle}|{text}|{time.time()}|{sender_color}|{system_bit}\n"
         for client_id, sock in connections_to_notify:
             try:
                 sock.send(message.encode('utf-8'))

@@ -6,7 +6,7 @@ import sys
 import time
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 from queue import Queue
 import os
 
@@ -16,43 +16,45 @@ import os
 class Colors:
     RESET      = '\033[0m'
     BOLD       = '\033[1m'
-    DIM        = '\033[2m'
 
     # UI chrome  (teal/slate)
-    TEAL       = '\033[36m'
     BRIGHT_TEAL = '\033[96m'
-    SLATE      = '\033[34m'
-    BRIGHT_SLATE = '\033[94m'
 
     # System/status messages
     GRAY       = '\033[37m'
     DARK_GRAY  = '\033[90m'
 
     # Handle colors
-    CYAN        = '\033[36m'
-    MAGENTA     = '\033[35m'
+    PINK        = '\033[38;5;213m'
     YELLOW      = '\033[33m'
     GREEN       = '\033[32m'
     RED         = '\033[31m'
     BLUE        = '\033[34m'
-    BRIGHT_CYAN    = '\033[96m'
-    BRIGHT_MAGENTA = '\033[95m'
-    BRIGHT_YELLOW  = '\033[93m'
-    BRIGHT_GREEN   = '\033[92m'
-    BRIGHT_RED     = '\033[91m'
-    BRIGHT_BLUE    = '\033[94m'
+    BRIGHT_RED  = '\033[91m'
 
-HANDLE_COLORS = [
-    Colors.CYAN,         Colors.MAGENTA,        Colors.YELLOW,
-    Colors.GREEN,        Colors.RED,            Colors.BLUE,
-    Colors.BRIGHT_CYAN,  Colors.BRIGHT_MAGENTA, Colors.BRIGHT_YELLOW,
-    Colors.BRIGHT_GREEN, Colors.BRIGHT_RED,     Colors.BRIGHT_BLUE,
-]
+COLOR_BY_NAME: Dict[str, str] = {
+    "pink": Colors.PINK,
+    "yellow": Colors.YELLOW,
+    "green": Colors.GREEN,
+    "red": Colors.RED,
+    "blue": Colors.BLUE,
+    "bright_teal": Colors.BRIGHT_TEAL,
+    "gray": Colors.GRAY,
+    "dark_gray": Colors.DARK_GRAY,
+}
+
+USER_PICKABLE_COLORS = {
+    "red", "green", "blue", "yellow", "pink"
+}
 
 CLIENT_VERSION = "1.0.0"
 
-def get_color_for_handle(handle: str) -> str:
-    return HANDLE_COLORS[hash(handle) % len(HANDLE_COLORS)]
+def get_color_by_name(color_name: str, fallback_handle: str = "") -> str:
+    if color_name in COLOR_BY_NAME:
+        return COLOR_BY_NAME[color_name]
+    if fallback_handle:
+        return Colors.BLUE
+    return Colors.BRIGHT_TEAL
 
 def format_time(timestamp: float) -> str:
     return datetime.fromtimestamp(timestamp).strftime("%H:%M")
@@ -79,17 +81,18 @@ def center(text: str, width: int = WIDTH) -> str:
 # ============================================================
 class TXCommClient:
     def __init__(self, host: str = 'localhost', port: int = 1717,
-                 handle: str = 'USER', chatroom: str = 'main'):
+                 handle: str = 'USER', chatroom: str = 'main', color_name: str = 'blue'):
         self.host = host
         self.port = port
         self.handle = handle
         self.chatroom = chatroom
+        self.color_name = color_name if color_name in USER_PICKABLE_COLORS else 'blue'
         self.socket: Optional[socket.socket] = None
         self.running = False
         self.connected = False
         self.in_lobby = True
         self.pending_join_memo = chatroom.strip() if chatroom else ''
-        self.messages: List[Tuple[str, str, float]] = []
+        self.messages: List[Tuple[str, str, float, str, bool]] = []
         self.message_queue = Queue()
         self.lock = threading.Lock()
 
@@ -100,7 +103,7 @@ class TXCommClient:
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((self.host, self.port))
-            self.socket.send(f"LOGIN|{self.handle}|{CLIENT_VERSION}".encode('utf-8'))
+            self.socket.send(f"LOGIN|{self.handle}|{CLIENT_VERSION}|{self.color_name}".encode('utf-8'))
 
             server_msg = self._recv_line()
             if not server_msg:
@@ -214,14 +217,16 @@ class TXCommClient:
                 for line in data.split('\n'):
                     if not line:
                         continue
-                    parts = line.split('|', 3)
+                    parts = line.split('|', 5)
                     msg_type = parts[0]
                     if msg_type == 'MSG':
                         sender    = parts[1] if len(parts) > 1 else "UNKNOWN"
                         message   = parts[2] if len(parts) > 2 else ""
                         timestamp = float(parts[3]) if len(parts) > 3 else time.time()
+                        sender_color = parts[4] if len(parts) > 4 and parts[4] else ""
+                        is_system = parts[5] == '1' if len(parts) > 5 else sender == "SYSTEM"
                         with self.lock:
-                            self.messages.append((sender, message, timestamp))
+                            self.messages.append((sender, message, timestamp, sender_color, is_system))
                         self.message_queue.put(('refresh',))
                     elif msg_type == 'READY':
                         self.message_queue.put(('ready', parts[1] if len(parts) > 1 else ""))
@@ -273,19 +278,23 @@ class TXCommClient:
 
         clear_screen()
 
+        my_color = get_color_by_name(self.color_name, self.handle)
+
         # ── Header ───────────────────────────────────────────────
         print()
         print(rule('=', Colors.BOLD + Colors.BRIGHT_TEAL))
         if self.in_lobby:
             title_line = (
                 f"{Colors.BOLD}{Colors.BRIGHT_TEAL}"
-                f"  LOBBY  --  logged in as {self.handle}"
+                f"  LOBBY  --  logged in as "
+                f"{my_color}{self.handle}{Colors.BRIGHT_TEAL}"
                 f"{Colors.RESET}"
             )
         else:
             title_line = (
                 f"{Colors.BOLD}{Colors.BRIGHT_TEAL}"
-                f"  {self.chatroom.upper()} --  logged in as {self.handle}"
+                f"  {self.chatroom.upper()}  --  logged in as "
+                f"{my_color}{self.handle}{Colors.BRIGHT_TEAL}"
                 f"{Colors.RESET}"
             )
         print(title_line)
@@ -298,12 +307,21 @@ class TXCommClient:
 
         # ── Message log ──────────────────────────────────────────
         with self.lock:
-            for sender, text, timestamp in self.messages:
-                if sender == "SYSTEM":
-                    print(f"{Colors.DARK_GRAY}-- {text} --{Colors.RESET}")
+            for sender, text, timestamp, sender_color_name, is_system in self.messages:
+                sender_color = get_color_by_name(sender_color_name, sender)
+                if is_system:
+                    if sender != "SYSTEM" and sender and sender in text:
+                        formatted = text.replace(
+                            sender,
+                            f"{sender_color}{sender}{Colors.DARK_GRAY}"
+                        )
+                        print(f"{Colors.DARK_GRAY}-- {formatted} --{Colors.RESET}")
+                    else:
+                        base_color = get_color_by_name(sender_color_name)
+                        print(f"{base_color}-- {text} --{Colors.RESET}")
                     continue
 
-                handle_color = get_color_for_handle(sender)
+                handle_color = sender_color
                 time_str = format_time(timestamp)
 
                 # [HH:MM] handleName: message text
@@ -314,7 +332,6 @@ class TXCommClient:
 
         # ── Input prompt ─────────────────────────────────────────
         print(rule('-', Colors.BOLD + Colors.BRIGHT_TEAL))
-        my_color = get_color_for_handle(self.handle)
         print(f"{my_color}{Colors.BOLD}{self.handle}: {current_input}", end="")
         sys.stdout.flush()
 
@@ -389,7 +406,7 @@ class TXCommClient:
                         info = msg[1]
                         if info:
                             with self.lock:
-                                self.messages.append(("SYSTEM", info, time.time()))
+                                self.messages.append((self.handle, info, time.time(), self.color_name, True))
                         if self.pending_join_memo:
                             if self.in_lobby or self.pending_join_memo != self.chatroom:
                                 with self.lock:
@@ -407,24 +424,24 @@ class TXCommClient:
                         self.in_lobby = True
                         self.chatroom = ''
                         with self.lock:
-                            self.messages = [("SYSTEM", "Returned to lobby", time.time())]
+                            self.messages = [("SYSTEM", "Returned to lobby", time.time(), "dark_gray", True)]
                         self.draw_screen()
 
                     elif msg[0] == 'list':
                         rooms = msg[1]
                         room_text = ", ".join(rooms) if rooms else "(none yet)"
                         with self.lock:
-                            self.messages.append(("SYSTEM", f"Memos: {room_text}", time.time()))
+                            self.messages.append(("SYSTEM", f"Memos: {room_text}", time.time(), "dark_gray", True))
                         self.draw_screen()
 
                     elif msg[0] == 'error':
                         with self.lock:
-                            self.messages.append(("SYSTEM", f"Error: {msg[1]}", time.time()))
+                            self.messages.append(("SYSTEM", f"Error: {msg[1]}", time.time(), "bright_red", True))
                         self.draw_screen()
 
                     elif msg[0] == 'info':
                         with self.lock:
-                            self.messages.append(("SYSTEM", msg[1], time.time()))
+                            self.messages.append(("SYSTEM", msg[1], time.time(), "dark_gray", True))
                         self.draw_screen()
 
                     elif msg[0] == 'input':
@@ -450,7 +467,7 @@ class TXCommClient:
                                 self.join_memo(memo_name)
                             else:
                                 with self.lock:
-                                    self.messages.append(("SYSTEM", "Usage: /join <memo>", time.time()))
+                                    self.messages.append(("SYSTEM", "Usage: /join <memo>", time.time(), "dark_gray", True))
                                 self.draw_screen()
                             continue
 
@@ -458,7 +475,7 @@ class TXCommClient:
                             self.send_message(user_input)
                         elif user_input and self.in_lobby:
                             with self.lock:
-                                self.messages.append(("SYSTEM", "Join a memo first: /join <memo>", time.time()))
+                                self.messages.append(("SYSTEM", "Join a memo first: /join <memo>", time.time(), "dark_gray", True))
 
                         self.draw_screen()
 
@@ -472,8 +489,9 @@ class TXCommClient:
             self.running = False
             self.quit()
             print(
-                f"\n{Colors.DARK_GRAY}-- {self.handle} "
-                f"has disconnected. --{Colors.RESET}\n"
+                f"\n{Colors.DARK_GRAY}-- "
+                f"{get_color_by_name(self.color_name, self.handle)}{self.handle}"
+                f"{Colors.DARK_GRAY} has disconnected. --{Colors.RESET}\n"
             )
             subprocess.run(["stty", "sane"])
 
@@ -530,8 +548,24 @@ def main():
     )
 
     print()
+    print(f"{Colors.DARK_GRAY}-- Choose handle color --{Colors.RESET}")
+    color_options = [
+        "red", "green", "blue", "yellow", "pink"
+    ]
+    colored_options = ", ".join(
+        f"{get_color_by_name(opt)}{opt}{Colors.RESET}" for opt in color_options
+    )
+    print(f"  {colored_options}")
+    color_name = input(
+        f"  {Colors.BRIGHT_TEAL}color{Colors.RESET}          "
+        f"{Colors.DARK_GRAY}[red]{Colors.RESET} {Colors.BRIGHT_TEAL}: {Colors.RESET}"
+    ).strip().lower() or "red"
+    if color_name not in USER_PICKABLE_COLORS:
+        color_name = "red"
 
-    client = TXCommClient(host=host, port=port, handle=handle, chatroom=chatroom)
+    print()
+
+    client = TXCommClient(host=host, port=port, handle=handle, chatroom=chatroom, color_name=color_name)
     client.run()
 
 
