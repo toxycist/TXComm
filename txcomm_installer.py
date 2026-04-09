@@ -61,7 +61,6 @@ def recv_exact(sock: socket.socket, size: int) -> Optional[bytes]:
 
 
 def install_binary(payload: bytes, install_dir: Path, binary_name: str) -> Path:
-    install_dir.mkdir(parents=True, exist_ok=True)
     target = install_dir / binary_name
     temp = target.with_suffix(target.suffix + ".new")
     backup = target.with_suffix(target.suffix + ".bak")
@@ -120,6 +119,22 @@ def prompt_settings():
 
 def main():
     host, port, install_dir, launch_now = prompt_settings()
+    if not install_dir.exists():
+        print()
+        print_error(f"Install directory does not exist: {install_dir}")
+        return
+    if not install_dir.is_dir():
+        print()
+        print_error(f"Install path is not a directory: {install_dir}")
+        return
+    if not os.access(install_dir, os.W_OK):
+        print()
+        print_error(f"No write permission for install directory: {install_dir}")
+        return
+    if not os.access(install_dir, os.X_OK):
+        print()
+        print_error(f"No execute permission for install directory: {install_dir}")
+        return
     print()
     print_system(f"Connecting to {host}:{port}")
 
