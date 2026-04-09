@@ -47,7 +47,7 @@ USER_PICKABLE_COLORS = {
     "red", "green", "blue", "yellow", "pink"
 }
 
-CLIENT_VERSION = "1.0.2"
+CLIENT_VERSION = "1.0.3"
 
 def get_color_by_name(color_name: str, fallback_handle: str = "") -> str:
     if color_name in COLOR_BY_NAME:
