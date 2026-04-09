@@ -123,7 +123,9 @@ class TXCommClient:
                 msg_type = parts[0]
 
             if msg_type == 'READY':
-                self.message_queue.put(('ready', parts[1] if len(parts) > 1 else ""))
+                assigned_handle = parts[1] if len(parts) > 2 else self.handle
+                ready_text = parts[2] if len(parts) > 2 else (parts[1] if len(parts) > 1 else "")
+                self.message_queue.put(('ready', assigned_handle, ready_text))
             elif msg_type in ('UPDATE', 'UPDATE_BIN'):
                 if msg_type == 'UPDATE_BIN' and len(parts) != 4:
                     print(f"{Colors.BRIGHT_RED}-- Invalid update payload from server --{Colors.RESET}")
@@ -403,7 +405,9 @@ class TXCommClient:
                         self.draw_screen()
 
                     elif msg[0] == 'ready':
-                        info = msg[1]
+                        assigned_handle = msg[1]
+                        info = msg[2]
+                        self.handle = assigned_handle
                         if info:
                             with self.lock:
                                 self.messages.append((self.handle, info, time.time(), self.color_name, True))

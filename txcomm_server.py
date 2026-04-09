@@ -165,6 +165,24 @@ class TXCommServer:
     def normalize_user_color(self, color_name: str) -> str:
         return color_name if color_name in self.allowed_user_colors else "blue"
 
+    def resolve_unique_handle(self, requested_handle: str) -> str:
+        with self.lock:
+            used_handles = {
+                (session.get("handle") or "").lower()
+                for session in self.sessions.values()
+                if isinstance(session, dict)
+            }
+
+        if requested_handle.lower() not in used_handles:
+            return requested_handle
+
+        suffix = 1
+        while True:
+            candidate = f"{requested_handle}({suffix})"
+            if candidate.lower() not in used_handles:
+                return candidate
+            suffix += 1
+
     def log_event(self, text: str):
         timestamp = datetime.now().strftime("%H:%M:%S")
         with self.lock:
@@ -332,10 +350,11 @@ class TXCommServer:
                 self.log_event(f"Rejected invalid login from {client_id}")
                 return
 
-            user_handle = parts[1]
+            requested_handle = parts[1]
             client_version = parts[2]
             user_color = self.normalize_user_color(parts[3] if len(parts) == 4 and parts[3] else "blue")
             latest_version = self.get_latest_client_version()
+            user_handle = self.resolve_unique_handle(requested_handle)
 
             if self.is_version_mismatch(client_version, latest_version):
                 client_socket.send(f"MISMATCH|{client_version}|{latest_version}\n".encode('utf-8'))
@@ -361,7 +380,7 @@ class TXCommServer:
             authenticated = True
             self.log_event(f"{client_id} authenticated as {self.colorize_handle(user_handle, user_color)}")
 
-            client_socket.send(f"READY|Logged in as {user_handle}. You are in the lobby.\n".encode('utf-8'))
+            client_socket.send(f"READY|{user_handle}|Logged in as {user_handle}. You are in the lobby.\n".encode('utf-8'))
 
             while True:
                 data = client_socket.recv(1024).decode('utf-8').strip()
