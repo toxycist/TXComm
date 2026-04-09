@@ -92,6 +92,7 @@ class TXCommClient:
         self.connected = False
         self.in_lobby = True
         self.pending_join_memo = chatroom.strip() if chatroom else ''
+        self.online_users: List[Tuple[str, str]] = []
         self.messages: List[Tuple[str, str, float, str, bool]] = []
         self.message_queue = Queue()
         self.lock = threading.Lock()
@@ -231,12 +232,23 @@ class TXCommClient:
                             self.messages.append((sender, message, timestamp, sender_color, is_system))
                         self.message_queue.put(('refresh',))
                     elif msg_type == 'READY':
-                        self.message_queue.put(('ready', parts[1] if len(parts) > 1 else ""))
+                        assigned_handle = parts[1] if len(parts) > 1 else self.handle
+                        info_message = parts[2] if len(parts) > 2 else ""
+                        self.message_queue.put(('ready', assigned_handle, info_message))
                     elif msg_type == 'JOINED':
                         memo_name = parts[1] if len(parts) > 1 else self.chatroom
                         self.message_queue.put(('joined', memo_name))
                     elif msg_type == 'LEFT':
                         self.message_queue.put(('left',))
+                    elif msg_type == 'USERS':
+                        users: List[Tuple[str, str]] = []
+                        if len(parts) > 1 and parts[1]:
+                            for item in parts[1].split(';'):
+                                if not item:
+                                    continue
+                                handle, _, color = item.partition(':')
+                                users.append((handle, color or "red"))
+                        self.message_queue.put(('users', users))
                     elif msg_type == 'LIST':
                         rooms = parts[1].split(',') if len(parts) > 1 and parts[1] else []
                         self.message_queue.put(('list', rooms))
@@ -301,10 +313,25 @@ class TXCommClient:
             )
         print(title_line)
         print(rule('=', Colors.BOLD + Colors.BRIGHT_TEAL))
+
+        if not self.in_lobby:
+            users_count = len(self.online_users)
+            users_preview = ", ".join(
+                f"{get_color_by_name(color, handle)}{handle}{Colors.BRIGHT_TEAL}"
+                for handle, color in self.online_users[:8]
+            )
+            if users_count > 8:
+                users_preview += f"{Colors.BRIGHT_TEAL}, +{users_count - 8}{Colors.BRIGHT_TEAL}"
+            print(
+                f"{Colors.BRIGHT_TEAL}"
+                f"  online users ({users_count}): {users_preview if users_preview else '(none)'}"
+                f"{Colors.RESET}"
+            )
+
         if self.in_lobby:
-            print(f"{Colors.BOLD}{Colors.BRIGHT_TEAL}  Commands: /join <memo>, /list, /quit{Colors.RESET}")
+            print(f"{Colors.BRIGHT_TEAL}  commands: /join <memo>, /list, /quit{Colors.RESET}")
         else:
-            print(f"{Colors.BOLD}{Colors.BRIGHT_TEAL}  Commands: /leave, /join <memo>, /quit{Colors.RESET}")
+            print(f"{Colors.BRIGHT_TEAL}  commands: /leave, /join <memo>, /quit{Colors.RESET}")
         print()
 
         # ── Message log ──────────────────────────────────────────
@@ -427,8 +454,13 @@ class TXCommClient:
                     elif msg[0] == 'left':
                         self.in_lobby = True
                         self.chatroom = ''
+                        self.online_users = []
                         with self.lock:
                             self.messages = [("SYSTEM", "Returned to lobby", time.time(), "dark_gray", True)]
+                        self.draw_screen()
+
+                    elif msg[0] == 'users':
+                        self.online_users = msg[1]
                         self.draw_screen()
 
                     elif msg[0] == 'list':

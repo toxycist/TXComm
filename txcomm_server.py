@@ -260,6 +260,29 @@ class TXCommServer:
             exclude_client_id=exclude_client_id
         )
 
+    def broadcast_users_list(self, chatroom_name: str):
+        with self.lock:
+            users = sorted(
+                [
+                    (session.get("handle") or "UNKNOWN", session.get("color") or "red")
+                    for session in self.sessions.values()
+                    if isinstance(session, dict) and session.get("chatroom") == chatroom_name
+                ],
+                key=lambda item: item[0].lower()
+            )
+            targets = [
+                sock for cid, sock in self.active_connections.items()
+                if cid in self.sessions and self.sessions[cid].get("chatroom") == chatroom_name
+            ]
+
+        payload = ";".join(f"{handle}:{color}" for handle, color in users)
+        packet = f"USERS|{payload}\n".encode('utf-8')
+        for sock in targets:
+            try:
+                sock.send(packet)
+            except Exception:
+                pass
+
     def get_latest_client_version(self) -> str:
         if not self.server_client_source_path.exists():
             return "0.0.0"
@@ -417,6 +440,7 @@ class TXCommServer:
                         self.log_event(
                             f"{self.colorize_handle(user_handle, user_color)} left memo {previous_chatroom}"
                         )
+                        self.broadcast_users_list(previous_chatroom)
 
                     chatroom = self.get_or_create_chatroom(requested_chatroom)
                     chatroom.add_user(user_handle)
@@ -435,6 +459,7 @@ class TXCommServer:
                         )
                     client_socket.send(f"JOINED|{chatroom_name}\n".encode('utf-8'))
                     self.emit_system_event(chatroom_name, user_handle, user_color, f"{user_handle} joined the memo")
+                    self.broadcast_users_list(chatroom_name)
                     self.log_event(
                         f"{self.colorize_handle(user_handle, user_color)} joined memo {chatroom_name}"
                     )
@@ -454,6 +479,7 @@ class TXCommServer:
                         chatroom_name = None
                         self.emit_system_event(active_chatroom, user_handle, user_color, f"{user_handle} left the memo")
                         client_socket.send(b"LEFT|Lobby\n")
+                        self.broadcast_users_list(active_chatroom)
                         self.log_event(
                             f"{self.colorize_handle(user_handle, user_color)} returned to lobby from {active_chatroom}"
                         )
@@ -517,12 +543,13 @@ class TXCommServer:
                 chatroom = self.chatrooms.get(active_chatroom) if active_chatroom else None
                 if chatroom:
                     chatroom.remove_user(user_handle)
-                    user_color = "bright_teal"
+                    user_color = "red"
                     with self.lock:
                         session = self.sessions.get(client_id)
                         if session and session.get("color"):
                             user_color = session["color"]
                     self.emit_system_event(active_chatroom, user_handle, user_color, f"{user_handle} left the memo")
+                    self.broadcast_users_list(active_chatroom)
 
             with self.lock:
                 if client_id in self.active_connections:
