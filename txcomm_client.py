@@ -490,7 +490,7 @@ class TXCommClient:
                             self.request_memo_list()
                             continue
 
-                        if user_input.lower() == '/leave':
+                        if user_input.lower() in ['/leave', '/l']:
                             self.leave_memo()
                             continue
 
