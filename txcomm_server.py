@@ -28,7 +28,7 @@ def rule(char: str = '-', color: str = Colors.BRIGHT_TEAL) -> str:
     return f"{color}{char * WIDTH}{Colors.RESET}"
 
 def clear_screen():
-    os.system('clear' if os.name == 'posix' else 'cls')
+    subprocess.run('clear' if os.name == 'posix' else 'cls')
 
 class Message:
     def __init__(
