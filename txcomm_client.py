@@ -47,7 +47,7 @@ USER_PICKABLE_COLORS = {
     "red", "green", "blue", "yellow", "pink"
 }
 
-CLIENT_VERSION = "1.0.3"
+CLIENT_VERSION = "1.0.4"
 
 def get_color_by_name(color_name: str, fallback_handle: str = "") -> str:
     if color_name in COLOR_BY_NAME:
@@ -81,7 +81,7 @@ def center(text: str, width: int = WIDTH) -> str:
 # ============================================================
 class TXCommClient:
     def __init__(self, host: str = 'localhost', port: int = 1717,
-                 handle: str = 'USER', chatroom: str = 'main', color_name: str = 'blue'):
+                 handle: str = 'USER', chatroom: str = '', color_name: str = 'blue'):
         self.host = host
         self.port = port
         self.handle = handle
