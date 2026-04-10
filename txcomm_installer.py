@@ -140,7 +140,7 @@ def main():
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect((host, port))
-        sock.send(f"LOGIN|{INSTALLER_HANDLE}|{INSTALLER_VERSION}".encode("utf-8"))
+        sock.send(f"LOGIN|{INSTALLER_HANDLE}|{INSTALLER_VERSION}\n".encode("utf-8"))
 
         first = recv_line(sock)
         if not first:

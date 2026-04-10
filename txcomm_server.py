@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import socket
+import select
 import threading
 import json
 import os
@@ -38,18 +39,26 @@ def encode_field(value: str) -> str:
 def decode_field(value: str) -> str:
     return unquote(value or "")
 
-def recv_line(sock: socket.socket) -> str:
-    buffer = b''
+def recv_command(sock: socket.socket, buffer: str, timeout: float = 0.15) -> tuple[str, str]:
     while True:
+        if '\n' in buffer:
+            line, buffer = buffer.split('\n', 1)
+            return line.strip(), buffer
+
+        ready, _, _ = select.select([sock], [], [], timeout)
+        if not ready:
+            if buffer:
+                line, buffer = buffer, ""
+                return line.strip(), buffer
+            continue
+
         chunk = sock.recv(1024)
         if not chunk:
-            break
-        buffer += chunk
-        if b'\n' in chunk:
-            break
-    if not buffer:
-        return ''
-    return buffer.decode('utf-8').split('\n', 1)[0].strip()
+            if buffer:
+                line, buffer = buffer, ""
+                return line.strip(), buffer
+            return '', ''
+        buffer += chunk.decode('utf-8', errors='replace')
 
 class Message:
     def __init__(
@@ -433,10 +442,11 @@ class TXCommServer:
         user_handle = None
         authenticated = False
         chatroom_name = None
+        recv_buffer = ""
 
         try:
             # Wait for initial handshake: LOGIN|handle|version|color
-            data = recv_line(client_socket)
+            data, recv_buffer = recv_command(client_socket, recv_buffer)
             parts = data.split('|', 3)
 
             if parts[0] != 'LOGIN' or len(parts) < 3 or len(parts) > 4 or not parts[1]:
@@ -477,7 +487,7 @@ class TXCommServer:
             client_socket.send(f"READY|{user_handle}|Logged in as {user_handle}. You are in the lobby.\n".encode('utf-8'))
 
             while True:
-                data = recv_line(client_socket)
+                data, recv_buffer = recv_command(client_socket, recv_buffer)
                 if not data:
                     break
 
