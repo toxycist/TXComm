@@ -486,10 +486,10 @@ class TXCommServer:
                     else:
                         client_socket.send(b"INFO|You are already in the lobby\n")
 
-                elif data == 'LIST':
+                elif data == 'MEMOS':
                     rooms = self.list_chatrooms()
                     payload = ",".join(rooms)
-                    client_socket.send(f"LIST|{payload}\n".encode('utf-8'))
+                    client_socket.send(f"MEMOS|{payload}\n".encode('utf-8'))
 
                 elif data.startswith('SAY|'):
                     message_text = data[4:]

@@ -249,9 +249,9 @@ class TXCommClient:
                                 handle, _, color = item.partition(':')
                                 users.append((handle, color or "red"))
                         self.message_queue.put(('users', users))
-                    elif msg_type == 'LIST':
+                    elif msg_type == 'MEMOS':
                         rooms = parts[1].split(',') if len(parts) > 1 and parts[1] else []
-                        self.message_queue.put(('list', rooms))
+                        self.message_queue.put(('memos', rooms))
                     elif msg_type == 'ERROR':
                         self.message_queue.put(('error', parts[1] if len(parts) > 1 else "Unknown error"))
                     elif msg_type == 'INFO':
@@ -329,7 +329,7 @@ class TXCommClient:
             )
 
         if self.in_lobby:
-            print(f"{Colors.BRIGHT_TEAL}  commands: /join <memo>, /list, /quit{Colors.RESET}")
+            print(f"{Colors.BRIGHT_TEAL}  commands: /join <memo>, /memos, /quit{Colors.RESET}")
         else:
             print(f"{Colors.BRIGHT_TEAL}  commands: /leave, /join <memo>, /quit{Colors.RESET}")
         print()
@@ -388,10 +388,10 @@ class TXCommClient:
             except Exception:
                 pass
 
-    def request_memo_list(self):
+    def request_memos(self):
         if self.connected:
             try:
-                self.socket.send(b"LIST")
+                self.socket.send(b"MEMOS")
             except Exception:
                 pass
 
@@ -463,7 +463,7 @@ class TXCommClient:
                         self.online_users = msg[1]
                         self.draw_screen()
 
-                    elif msg[0] == 'list':
+                    elif msg[0] == 'memos':
                         rooms = msg[1]
                         room_text = ", ".join(rooms) if rooms else "(none yet)"
                         with self.lock:
@@ -486,8 +486,8 @@ class TXCommClient:
                         if user_input.lower() in ['/quit', '/exit', '/q']:
                             break
 
-                        if user_input.lower() == '/list':
-                            self.request_memo_list()
+                        if user_input.lower() == '/memos':
+                            self.request_memos()
                             continue
 
                         if user_input.lower() in ['/leave', '/l']:
