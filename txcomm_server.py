@@ -7,6 +7,7 @@ import re
 import sys
 import shutil
 import subprocess
+import textwrap
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Set, Optional
@@ -125,6 +126,7 @@ class TXCommServer:
         self.base_dir = Path(__file__).resolve().parent
         self.server_client_source_path = self.base_dir / "txcomm_client.py"
         self.chatrooms_dir = self.base_dir / "chatrooms"
+        self.log_file_path = self.base_dir / "log.txt"
         self.update_build_dir = self.base_dir / "clients_updating"
         self.server_client_binary_path = self.update_build_dir / "dist" / "txcomm_client"
         self.events: List[str] = []
@@ -187,9 +189,12 @@ class TXCommServer:
     def log_event(self, text: str):
         timestamp = datetime.now().strftime("%H:%M:%S")
         with self.lock:
-            self.events.append(f"[{timestamp}] {text}")
+            event_line = f"[{timestamp}] {text}"
+            self.events.append(event_line)
             if len(self.events) > self.max_events:
                 self.events = self.events[-self.max_events:]
+            with self.log_file_path.open('a', encoding='utf-8') as log_file:
+                log_file.write(f"{event_line}\n")
         self.draw_dashboard()
 
     def draw_dashboard(self):
@@ -223,12 +228,27 @@ class TXCommServer:
             if event.startswith('[') and timestamp_end != -1:
                 timestamp = event[:timestamp_end + 1]
                 message = event[timestamp_end + 1:].strip()
+                wrapped = textwrap.wrap(
+                    message,
+                    width=max(10, WIDTH - 16),
+                    break_long_words=False,
+                    break_on_hyphens=False
+                ) or [""]
                 print(
                     f"  {Colors.DARK_GRAY}{timestamp}{Colors.RESET} "
-                    f"{Colors.BRIGHT_TEAL}{message}{Colors.RESET}"
+                    f"{Colors.BRIGHT_TEAL}{wrapped[0]}{Colors.RESET}"
                 )
+                for line in wrapped[1:]:
+                    print(f"            {Colors.BRIGHT_TEAL}{line}{Colors.RESET}")
             else:
-                print(f"  {Colors.BRIGHT_TEAL}{event}{Colors.RESET}")
+                wrapped = textwrap.wrap(
+                    event,
+                    width=max(10, WIDTH - 2),
+                    break_long_words=False,
+                    break_on_hyphens=False
+                ) or [""]
+                for line in wrapped:
+                    print(f"  {Colors.BRIGHT_TEAL}{line}{Colors.RESET}")
         print(rule('-', Colors.BRIGHT_TEAL))
         print(f"{Colors.BRIGHT_TEAL}  Press Ctrl+C to stop server{Colors.RESET}")
 
@@ -550,9 +570,8 @@ class TXCommServer:
                         sender_color=user_color,
                         is_system=False
                     )
-                    preview = message_text if len(message_text) <= 40 else f"{message_text[:37]}..."
                     self.log_event(
-                        f"{self.colorize_handle(user_handle, user_color)}@{active_chatroom}: {preview}"
+                        f"{self.colorize_handle(user_handle, user_color)}@{active_chatroom}: {message_text}"
                     )
 
                 elif data == 'QUIT':
