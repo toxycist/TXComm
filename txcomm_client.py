@@ -4,6 +4,7 @@ import subprocess
 import threading
 import sys
 import time
+from urllib.parse import unquote
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Tuple, Dict
@@ -47,7 +48,7 @@ USER_PICKABLE_COLORS = {
     "red", "green", "blue", "yellow", "pink"
 }
 
-CLIENT_VERSION = "1.0.6"
+CLIENT_VERSION = "1.0.7"
 
 def get_color_by_name(color_name: str, fallback_handle: str = "") -> str:
     if color_name in COLOR_BY_NAME:
@@ -61,6 +62,9 @@ def format_time(timestamp: float) -> str:
 
 def clear_screen():
     subprocess.run('clear' if os.name == 'posix' else 'cls')
+
+def decode_field(value: str) -> str:
+    return unquote(value or "")
 
 # ============================================================
 # Layout constants
@@ -223,10 +227,10 @@ class TXCommClient:
                     parts = line.split('|', 5)
                     msg_type = parts[0]
                     if msg_type == 'MSG':
-                        sender    = parts[1] if len(parts) > 1 else "UNKNOWN"
-                        message   = parts[2] if len(parts) > 2 else ""
+                        sender    = decode_field(parts[1]) if len(parts) > 1 else "UNKNOWN"
+                        message   = decode_field(parts[2]) if len(parts) > 2 else ""
                         timestamp = float(parts[3]) if len(parts) > 3 else time.time()
-                        sender_color = parts[4] if len(parts) > 4 and parts[4] else ""
+                        sender_color = decode_field(parts[4]) if len(parts) > 4 and parts[4] else ""
                         is_system = parts[5] == '1' if len(parts) > 5 else sender == "SYSTEM"
                         with self.lock:
                             self.messages.append((sender, message, timestamp, sender_color, is_system))

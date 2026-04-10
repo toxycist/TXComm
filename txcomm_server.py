@@ -8,6 +8,7 @@ import sys
 import shutil
 import subprocess
 import textwrap
+from urllib.parse import quote, unquote
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Set, Optional
@@ -30,6 +31,12 @@ def rule(char: str = '-', color: str = Colors.BRIGHT_TEAL) -> str:
 
 def clear_screen():
     subprocess.run('clear' if os.name == 'posix' else 'cls')
+
+def encode_field(value: str) -> str:
+    return quote(value or "", safe="")
+
+def decode_field(value: str) -> str:
+    return unquote(value or "")
 
 class Message:
     def __init__(
@@ -500,8 +507,11 @@ class TXCommServer:
                     recent = chatroom.get_recent_messages(20)
                     for msg in recent:
                         system_bit = 1 if msg.is_system else 0
+                        enc_handle = encode_field(msg.handle)
+                        enc_text = encode_field(msg.text)
+                        enc_color = encode_field(msg.color)
                         client_socket.send(
-                            f"MSG|{msg.handle}|{msg.text}|{msg.timestamp}|{msg.color}|{system_bit}\n".encode('utf-8')
+                            f"MSG|{enc_handle}|{enc_text}|{msg.timestamp}|{enc_color}|{system_bit}\n".encode('utf-8')
                         )
                     client_socket.send(f"JOINED|{chatroom_name}\n".encode('utf-8'))
                     self.emit_system_event(chatroom_name, user_handle, user_color, f"{user_handle} joined the memo")
@@ -647,7 +657,10 @@ class TXCommServer:
             ]
 
         system_bit = 1 if is_system else 0
-        message = f"MSG|{sender_handle}|{text}|{time.time()}|{sender_color}|{system_bit}\n"
+        enc_handle = encode_field(sender_handle)
+        enc_text = encode_field(text)
+        enc_color = encode_field(sender_color)
+        message = f"MSG|{enc_handle}|{enc_text}|{time.time()}|{enc_color}|{system_bit}\n"
         for client_id, sock in connections_to_notify:
             try:
                 sock.send(message.encode('utf-8'))
