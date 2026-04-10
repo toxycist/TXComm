@@ -485,6 +485,7 @@ class TXCommServer:
             self.log_event(f"{client_id} authenticated as {self.colorize_handle(user_handle, user_color)}")
 
             client_socket.send(f"READY|{user_handle}|Logged in as {user_handle}. You are in the lobby.\n".encode('utf-8'))
+            self.broadcast_users_list(None)
 
             while True:
                 data, recv_buffer = recv_command(client_socket, recv_buffer)
@@ -534,6 +535,7 @@ class TXCommServer:
                         session = self.sessions.get(client_id)
                         if session:
                             session["chatroom"] = chatroom_name
+                    self.broadcast_users_list(None)
 
                     recent = chatroom.get_recent_messages(20)
                     for msg in recent:
@@ -567,6 +569,7 @@ class TXCommServer:
                         self.emit_system_event(active_chatroom, user_handle, user_color, f"{user_handle} left the memo")
                         client_socket.send(b"LEFT|Lobby\n")
                         self.broadcast_users_list(active_chatroom)
+                        self.broadcast_users_list(None)
                         self.log_event(
                             f"{self.colorize_handle(user_handle, user_color)} returned to lobby from {active_chatroom}"
                         )
@@ -676,6 +679,7 @@ class TXCommServer:
                     del self.active_connections[client_id]
                 if client_id in self.sessions:
                     del self.sessions[client_id]
+            self.broadcast_users_list(None)
 
             try:
                 client_socket.close()

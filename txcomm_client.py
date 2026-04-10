@@ -327,19 +327,18 @@ class TXCommClient:
         print(title_line)
         print(rule('=', Colors.BOLD + Colors.BRIGHT_TEAL))
 
-        if not self.in_lobby:
-            users_count = len(self.online_users)
-            users_preview = ", ".join(
-                f"{get_color_by_name(color, handle)}{handle}{Colors.BRIGHT_TEAL}"
-                for handle, color in self.online_users[:8]
-            )
-            if users_count > 8:
-                users_preview += f"{Colors.BRIGHT_TEAL}, +{users_count - 8}{Colors.BRIGHT_TEAL}"
-            print(
-                f"{Colors.BRIGHT_TEAL}"
-                f"  in this memo ({users_count}): {users_preview if users_preview else '(none)'}"
-                f"{Colors.RESET}"
-            )
+        users_count = len(self.online_users)
+        users_preview = ", ".join(
+            f"{get_color_by_name(color, handle)}{handle}{Colors.BRIGHT_TEAL}"
+            for handle, color in self.online_users[:8]
+        )
+        if users_count > 8:
+            users_preview += f"{Colors.BRIGHT_TEAL}, +{users_count - 8}{Colors.BRIGHT_TEAL}"
+        print(
+            f"{Colors.BRIGHT_TEAL}"
+            f"  in this memo ({users_count}): {users_preview if users_preview else '(none)'}"
+            f"{Colors.RESET}"
+        )
 
         print(f"{Colors.BRIGHT_TEAL}  /help for commands{Colors.RESET}")
         print()
