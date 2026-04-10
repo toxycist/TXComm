@@ -219,12 +219,16 @@ class TXCommClient:
             return False
 
     def receive_loop(self):
+        recv_buffer = ""
         while self.running and self.connected:
             try:
-                data = self.socket.recv(1024).decode('utf-8').strip()
-                if not data:
+                chunk = self.socket.recv(1024)
+                if not chunk:
                     break
-                for line in data.split('\n'):
+                recv_buffer += chunk.decode('utf-8', errors='replace')
+                while '\n' in recv_buffer:
+                    line, recv_buffer = recv_buffer.split('\n', 1)
+                    line = line.strip()
                     if not line:
                         continue
                     parts = line.split('|', 5)
