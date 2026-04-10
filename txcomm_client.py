@@ -47,7 +47,7 @@ USER_PICKABLE_COLORS = {
     "red", "green", "blue", "yellow", "pink"
 }
 
-CLIENT_VERSION = "1.0.4"
+CLIENT_VERSION = "1.0.5"
 
 def get_color_by_name(color_name: str, fallback_handle: str = "") -> str:
     if color_name in COLOR_BY_NAME:
@@ -329,9 +329,9 @@ class TXCommClient:
             )
 
         if self.in_lobby:
-            print(f"{Colors.BRIGHT_TEAL}  commands: /join <memo>, /memos, /quit{Colors.RESET}")
+            print(f"{Colors.BRIGHT_TEAL}  commands: /join <memo>, /memos, /users, /quit{Colors.RESET}")
         else:
-            print(f"{Colors.BRIGHT_TEAL}  commands: /leave, /join <memo>, /quit{Colors.RESET}")
+            print(f"{Colors.BRIGHT_TEAL}  commands: /leave, /join <memo>, /users, /quit{Colors.RESET}")
         print()
 
         # ── Message log ──────────────────────────────────────────
@@ -392,6 +392,13 @@ class TXCommClient:
         if self.connected:
             try:
                 self.socket.send(b"MEMOS")
+            except Exception:
+                pass
+
+    def request_users(self):
+        if self.connected:
+            try:
+                self.socket.send(b"USERS")
             except Exception:
                 pass
 
@@ -488,6 +495,10 @@ class TXCommClient:
 
                         if user_input.lower() == '/memos':
                             self.request_memos()
+                            continue
+
+                        if user_input.lower() == '/users':
+                            self.request_users()
                             continue
 
                         if user_input.lower() in ['/leave', '/l']:

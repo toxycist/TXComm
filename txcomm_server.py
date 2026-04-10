@@ -260,7 +260,12 @@ class TXCommServer:
             exclude_client_id=exclude_client_id
         )
 
-    def broadcast_users_list(self, chatroom_name: str):
+    def broadcast_users_list(
+        self,
+        chatroom_name: Optional[str],
+        mode: str = "header",
+        target_client_id: Optional[str] = None
+    ):
         with self.lock:
             users = sorted(
                 [
@@ -270,13 +275,31 @@ class TXCommServer:
                 ],
                 key=lambda item: item[0].lower()
             )
-            targets = [
-                sock for cid, sock in self.active_connections.items()
-                if cid in self.sessions and self.sessions[cid].get("chatroom") == chatroom_name
-            ]
+            if target_client_id:
+                targets = [self.active_connections[target_client_id]] if target_client_id in self.active_connections else []
+            else:
+                targets = [
+                    sock for cid, sock in self.active_connections.items()
+                    if cid in self.sessions and self.sessions[cid].get("chatroom") == chatroom_name
+                ]
 
-        payload = ";".join(f"{handle}:{color}" for handle, color in users)
-        packet = f"USERS|{payload}\n".encode('utf-8')
+        if mode == "header":
+            payload = ";".join(f"{handle}:{color}" for handle, color in users)
+            packet = f"USERS|{payload}\n".encode('utf-8')
+        elif mode == "message":
+            room_label = chatroom_name if chatroom_name else "lobby"
+            if users:
+                users_text = ", ".join(
+                    f"{self.colorize_handle(handle, color)}{Colors.DARK_GRAY}"
+                    for handle, color in users
+                )
+            else:
+                users_text = "(none)"
+            text = f"Users in {room_label}: {users_text}"
+            packet = f"MSG|SYSTEM|{text}|{time.time()}|dark_gray|1\n".encode('utf-8')
+        else:
+            return
+
         for sock in targets:
             try:
                 sock.send(packet)
@@ -490,6 +513,18 @@ class TXCommServer:
                     rooms = self.list_chatrooms()
                     payload = ",".join(rooms)
                     client_socket.send(f"MEMOS|{payload}\n".encode('utf-8'))
+
+                elif data == 'USERS':
+                    active_chatroom = None
+                    with self.lock:
+                        session = self.sessions.get(client_id)
+                        if session:
+                            active_chatroom = session.get("chatroom")
+                    self.broadcast_users_list(
+                        active_chatroom,
+                        mode="message",
+                        target_client_id=client_id
+                    )
 
                 elif data.startswith('SAY|'):
                     message_text = data[4:]
