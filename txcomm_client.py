@@ -48,7 +48,7 @@ USER_PICKABLE_COLORS = {
     "red", "green", "blue", "yellow", "pink"
 }
 
-CLIENT_VERSION = "1.0.10"
+CLIENT_VERSION = "1.0.11"
 
 def get_color_by_name(color_name: str, fallback_handle: str = "") -> str:
     if color_name in COLOR_BY_NAME:
@@ -543,7 +543,7 @@ class TXCommClient:
                             self.draw_screen()
                             continue
 
-                        if user_input.lower().startswith('/online '):
+                        if user_input.lower() == '/online' or user_input.lower().startswith('/online '):
                             target_handle = user_input[8:].strip()
                             if not target_handle:
                                 with self.lock:
@@ -557,7 +557,7 @@ class TXCommClient:
                             self.leave_memo()
                             continue
 
-                        if user_input.lower().startswith('/join '):
+                        if user_input.lower() == '/join' or user_input.lower().startswith('/join '):
                             memo_name = user_input[6:].strip()
                             if memo_name:
                                 if memo_name.lower() == "lobby":
