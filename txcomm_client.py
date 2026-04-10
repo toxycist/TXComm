@@ -48,7 +48,7 @@ USER_PICKABLE_COLORS = {
     "red", "green", "blue", "yellow", "pink"
 }
 
-CLIENT_VERSION = "1.0.9"
+CLIENT_VERSION = "1.0.10"
 
 def get_color_by_name(color_name: str, fallback_handle: str = "") -> str:
     if color_name in COLOR_BY_NAME:
@@ -341,10 +341,7 @@ class TXCommClient:
                 f"{Colors.RESET}"
             )
 
-        if self.in_lobby:
-            print(f"{Colors.BRIGHT_TEAL}  commands: /join <memo>, /memos, /users, /online <handle>, /quit{Colors.RESET}")
-        else:
-            print(f"{Colors.BRIGHT_TEAL}  commands: /leave, /join <memo>, /users, /online <handle>, /quit{Colors.RESET}")
+        print(f"{Colors.BRIGHT_TEAL}  /help for commands{Colors.RESET}")
         print()
 
         # ── Message log ──────────────────────────────────────────
@@ -408,10 +405,10 @@ class TXCommClient:
             except Exception:
                 pass
 
-    def request_users(self):
+    def request_here(self):
         if self.connected:
             try:
-                self.socket.send(b"USERS\n")
+                self.socket.send(b"HERE\n")
             except Exception:
                 pass
 
@@ -421,6 +418,21 @@ class TXCommClient:
                 self.socket.send(f"ONLINE|{handle}\n".encode('utf-8'))
             except Exception:
                 pass
+
+    def add_help_messages(self):
+        help_lines = [
+            "Commands:",
+            "/help - Show this help message",
+            "/join <memo> - Join or create a memo",
+            "/leave (/l) - Leave current memo and return to lobby",
+            "/memos - List available memos",
+            "/here - List users in your current memo",
+            "/online <handle> - Check if a user is online",
+            "/quit (/q) - Disconnect and exit"
+        ]
+        with self.lock:
+            for line in help_lines:
+                self.messages.append(("SYSTEM", line, time.time(), "dark_gray", True))
 
     def quit(self):
         try:
@@ -516,15 +528,20 @@ class TXCommClient:
                     elif msg[0] == 'input':
                         user_input = msg[1]
 
-                        if user_input.lower() in ['/quit', '/exit', '/q']:
+                        if user_input.lower() in ['/quit', '/q']:
                             break
 
                         if user_input.lower() == '/memos':
                             self.request_memos()
                             continue
 
-                        if user_input.lower() == '/users':
-                            self.request_users()
+                        if user_input.lower() == '/here':
+                            self.request_here()
+                            continue
+
+                        if user_input.lower() == '/help':
+                            self.add_help_messages()
+                            self.draw_screen()
                             continue
 
                         if user_input.lower().startswith('/online '):

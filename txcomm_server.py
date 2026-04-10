@@ -319,7 +319,7 @@ class TXCommServer:
 
     def broadcast_users_list(
         self,
-        chatroom_name: Optional[str],
+        chatroom_name: Optional[str] = None,
         mode: str = "header",
         target_client_id: Optional[str] = None
     ):
@@ -578,7 +578,7 @@ class TXCommServer:
                     payload = ",".join(rooms)
                     client_socket.send(f"MEMOS|{payload}\n".encode('utf-8'))
 
-                elif data == 'USERS':
+                elif data == 'HERE':
                     active_chatroom = None
                     with self.lock:
                         session = self.sessions.get(client_id)
