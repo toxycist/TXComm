@@ -188,7 +188,13 @@ class TXCommServer:
     def normalize_user_color(self, color_name: str) -> str:
         return color_name if color_name in self.allowed_user_colors else "blue"
 
+    def normalize_handle(self, requested_handle: str, max_len: int = 25) -> str:
+        handle = (requested_handle or "").strip()
+        return handle[:max_len] if handle else "user"
+
     def resolve_unique_handle(self, requested_handle: str) -> str:
+        max_len = 25
+        base_handle = self.normalize_handle(requested_handle, max_len=max_len)
         with self.lock:
             used_handles = {
                 (session.get("handle") or "").lower()
@@ -196,12 +202,14 @@ class TXCommServer:
                 if isinstance(session, dict)
             }
 
-        if requested_handle.lower() not in used_handles:
-            return requested_handle
+        if base_handle.lower() not in used_handles:
+            return base_handle
 
         suffix = 1
         while True:
-            candidate = f"{requested_handle}({suffix})"
+            suffix_text = f"({suffix})"
+            trimmed_base = base_handle[:max_len - len(suffix_text)]
+            candidate = f"{trimmed_base}{suffix_text}"
             if candidate.lower() not in used_handles:
                 return candidate
             suffix += 1
