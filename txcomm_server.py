@@ -637,6 +637,7 @@ class TXCommServer:
                     session = self.sessions.get(client_id)
                     if session:
                         active_chatroom = session.get("chatroom")
+                        session["chatroom"] = None
 
                 chatroom = self.chatrooms.get(active_chatroom) if active_chatroom else None
                 if chatroom:
