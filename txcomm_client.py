@@ -48,7 +48,7 @@ USER_PICKABLE_COLORS = {
     "red", "green", "blue", "yellow", "pink"
 }
 
-CLIENT_VERSION = "1.0.8"
+CLIENT_VERSION = "1.0.9"
 
 def get_color_by_name(color_name: str, fallback_handle: str = "") -> str:
     if color_name in COLOR_BY_NAME:
@@ -266,7 +266,9 @@ class TXCommClient:
                     elif msg_type == 'ERROR':
                         self.message_queue.put(('error', parts[1] if len(parts) > 1 else "Unknown error"))
                     elif msg_type == 'INFO':
-                        self.message_queue.put(('info', parts[1] if len(parts) > 1 else ""))
+                        info_text = parts[1] if len(parts) > 1 else ""
+                        info_color = parts[2] if len(parts) > 2 and parts[2] else "dark_gray"
+                        self.message_queue.put(('info', info_text, info_color))
             except ConnectionResetError:
                 self.connected = False
                 break
@@ -335,14 +337,14 @@ class TXCommClient:
                 users_preview += f"{Colors.BRIGHT_TEAL}, +{users_count - 8}{Colors.BRIGHT_TEAL}"
             print(
                 f"{Colors.BRIGHT_TEAL}"
-                f"  online users ({users_count}): {users_preview if users_preview else '(none)'}"
+                f"  in this memo ({users_count}): {users_preview if users_preview else '(none)'}"
                 f"{Colors.RESET}"
             )
 
         if self.in_lobby:
-            print(f"{Colors.BRIGHT_TEAL}  commands: /join <memo>, /memos, /users, /quit{Colors.RESET}")
+            print(f"{Colors.BRIGHT_TEAL}  commands: /join <memo>, /memos, /users, /online <handle>, /quit{Colors.RESET}")
         else:
-            print(f"{Colors.BRIGHT_TEAL}  commands: /leave, /join <memo>, /users, /quit{Colors.RESET}")
+            print(f"{Colors.BRIGHT_TEAL}  commands: /leave, /join <memo>, /users, /online <handle>, /quit{Colors.RESET}")
         print()
 
         # ── Message log ──────────────────────────────────────────
@@ -410,6 +412,13 @@ class TXCommClient:
         if self.connected:
             try:
                 self.socket.send(b"USERS\n")
+            except Exception:
+                pass
+
+    def request_online_status(self, handle: str):
+        if self.connected and handle:
+            try:
+                self.socket.send(f"ONLINE|{handle}\n".encode('utf-8'))
             except Exception:
                 pass
 
@@ -494,8 +503,14 @@ class TXCommClient:
                         self.draw_screen()
 
                     elif msg[0] == 'info':
+                        info_text = msg[1]
+                        info_color = msg[2] if len(msg) > 2 else "dark_gray"
+                        if len(msg) > 2 and info_text.endswith(" is online"):
+                            handle = info_text[:-10]
+                            info_text = f"{get_color_by_name(info_color, handle)}{handle}{Colors.DARK_GRAY} is online"
+                            info_color = "dark_gray"
                         with self.lock:
-                            self.messages.append(("SYSTEM", msg[1], time.time(), "dark_gray", True))
+                            self.messages.append(("SYSTEM", info_text, time.time(), info_color, True))
                         self.draw_screen()
 
                     elif msg[0] == 'input':
@@ -510,6 +525,16 @@ class TXCommClient:
 
                         if user_input.lower() == '/users':
                             self.request_users()
+                            continue
+
+                        if user_input.lower().startswith('/online '):
+                            target_handle = user_input[8:].strip()
+                            if not target_handle:
+                                with self.lock:
+                                    self.messages.append(("SYSTEM", "Usage: /online <handle>", time.time(), "dark_gray", True))
+                                self.draw_screen()
+                                continue
+                            self.request_online_status(target_handle)
                             continue
 
                         if user_input.lower() in ['/leave', '/l']:

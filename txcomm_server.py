@@ -590,6 +590,27 @@ class TXCommServer:
                         target_client_id=client_id
                     )
 
+                elif data.startswith('ONLINE|'):
+                    requested = data[7:].strip()
+                    if not requested:
+                        client_socket.send(b"ERROR|Usage: /online <handle>\n")
+                        continue
+                    status_message = None
+                    status_color = "dark_gray"
+                    with self.lock:
+                        for session in self.sessions.values():
+                            if not isinstance(session, dict):
+                                continue
+                            handle = session.get("handle") or ""
+                            if handle.lower() == requested.lower():
+                                status_message = f"{handle} is online"
+                                status_color = session.get("color") or "blue"
+                                break
+                    if status_message:
+                        client_socket.send(f"INFO|{status_message}|{status_color}\n".encode('utf-8'))
+                    else:
+                        client_socket.send(f"INFO|{requested} is offline\n".encode('utf-8'))
+
                 elif data.startswith('SAY|'):
                     message_text = decode_field(data[4:])
                     active_chatroom = None
