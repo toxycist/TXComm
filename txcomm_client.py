@@ -81,7 +81,7 @@ def center(text: str, width: int = WIDTH) -> str:
 # ============================================================
 class TXCommClient:
     def __init__(self, host: str = 'localhost', port: int = 1717,
-                 handle: str = 'USER', chatroom: str = '', color_name: str = 'blue'):
+                 handle: str = 'user', chatroom: str = '', color_name: str = 'blue'):
         self.host = host
         self.port = port
         self.handle = handle
@@ -587,9 +587,9 @@ def main():
     handle = (
         input(
             f"  {Colors.BRIGHT_TEAL}handle{Colors.RESET}         "
-            f"{Colors.DARK_GRAY}[USER]{Colors.RESET}      {Colors.BRIGHT_TEAL}: {Colors.RESET}"
+            f"{Colors.DARK_GRAY}[user]{Colors.RESET}      {Colors.BRIGHT_TEAL}: {Colors.RESET}"
         ).strip()
-        or 'USER'
+        or 'user'
     )
 
     chatroom = (
