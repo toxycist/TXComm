@@ -47,7 +47,7 @@ USER_PICKABLE_COLORS = {
     "red", "green", "blue", "yellow", "pink"
 }
 
-CLIENT_VERSION = "1.0.5"
+CLIENT_VERSION = "1.0.6"
 
 def get_color_by_name(color_name: str, fallback_handle: str = "") -> str:
     if color_name in COLOR_BY_NAME:
@@ -479,7 +479,7 @@ class TXCommClient:
 
                     elif msg[0] == 'error':
                         with self.lock:
-                            self.messages.append(("SYSTEM", f"Error: {msg[1]}", time.time(), "bright_red", True))
+                            self.messages.append(("SYSTEM", f"Error: {msg[1]}", time.time(), "red", True))
                         self.draw_screen()
 
                     elif msg[0] == 'info':
@@ -508,6 +508,11 @@ class TXCommClient:
                         if user_input.lower().startswith('/join '):
                             memo_name = user_input[6:].strip()
                             if memo_name:
+                                if memo_name.lower() == "lobby":
+                                    with self.lock:
+                                        self.messages.append(("SYSTEM", "Error: Memo name 'lobby' is reserved", time.time(), "red", True))
+                                    self.draw_screen()
+                                    continue
                                 if self.in_lobby or memo_name != self.chatroom:
                                     with self.lock:
                                         self.messages = []

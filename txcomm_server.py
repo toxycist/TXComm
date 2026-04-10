@@ -438,6 +438,9 @@ class TXCommServer:
                     if not requested_chatroom:
                         client_socket.send(b"ERROR|Memo name cannot be empty\n")
                         continue
+                    if requested_chatroom.lower() == "lobby":
+                        client_socket.send(b"ERROR|Memo name 'lobby' is reserved\n")
+                        continue
 
                     previous_chatroom = None
                     with self.lock:
