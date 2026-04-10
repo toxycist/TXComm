@@ -615,7 +615,7 @@ def main():
     color_options = [
         "red", "green", "blue", "yellow", "pink"
     ]
-    colored_options = ", ".join(
+    colored_options = f"{Colors.DARK_GRAY}, {Colors.RESET}".join(
         f"{get_color_by_name(opt)}{opt}{Colors.RESET}" for opt in color_options
     )
     print(f"  {colored_options}")
