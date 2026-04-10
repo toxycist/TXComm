@@ -4,7 +4,7 @@ import subprocess
 import threading
 import sys
 import time
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Tuple, Dict
@@ -48,7 +48,7 @@ USER_PICKABLE_COLORS = {
     "red", "green", "blue", "yellow", "pink"
 }
 
-CLIENT_VERSION = "1.0.7"
+CLIENT_VERSION = "1.0.8"
 
 def get_color_by_name(color_name: str, fallback_handle: str = "") -> str:
     if color_name in COLOR_BY_NAME:
@@ -65,6 +65,9 @@ def clear_screen():
 
 def decode_field(value: str) -> str:
     return unquote(value or "")
+
+def encode_field(value: str) -> str:
+    return quote(value or "", safe="")
 
 # ============================================================
 # Layout constants
@@ -108,7 +111,7 @@ class TXCommClient:
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((self.host, self.port))
-            self.socket.send(f"LOGIN|{self.handle}|{CLIENT_VERSION}|{self.color_name}".encode('utf-8'))
+            self.socket.send(f"LOGIN|{self.handle}|{CLIENT_VERSION}|{self.color_name}\n".encode('utf-8'))
 
             server_msg = self._recv_line()
             if not server_msg:
@@ -374,41 +377,41 @@ class TXCommClient:
     def send_message(self, text: str):
         if self.connected:
             try:
-                self.socket.send(f"SAY|{text}".encode('utf-8'))
+                self.socket.send(f"SAY|{encode_field(text)}\n".encode('utf-8'))
             except Exception:
                 pass
 
     def join_memo(self, memo_name: str):
         if self.connected and memo_name:
             try:
-                self.socket.send(f"JOIN|{memo_name}".encode('utf-8'))
+                self.socket.send(f"JOIN|{memo_name}\n".encode('utf-8'))
             except Exception:
                 pass
 
     def leave_memo(self):
         if self.connected:
             try:
-                self.socket.send(b"LEAVE")
+                self.socket.send(b"LEAVE\n")
             except Exception:
                 pass
 
     def request_memos(self):
         if self.connected:
             try:
-                self.socket.send(b"MEMOS")
+                self.socket.send(b"MEMOS\n")
             except Exception:
                 pass
 
     def request_users(self):
         if self.connected:
             try:
-                self.socket.send(b"USERS")
+                self.socket.send(b"USERS\n")
             except Exception:
                 pass
 
     def quit(self):
         try:
-            self.socket.send(b"QUIT")
+            self.socket.send(b"QUIT\n")
         except Exception:
             pass
         finally:

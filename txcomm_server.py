@@ -38,6 +38,19 @@ def encode_field(value: str) -> str:
 def decode_field(value: str) -> str:
     return unquote(value or "")
 
+def recv_line(sock: socket.socket) -> str:
+    buffer = b''
+    while True:
+        chunk = sock.recv(1024)
+        if not chunk:
+            break
+        buffer += chunk
+        if b'\n' in chunk:
+            break
+    if not buffer:
+        return ''
+    return buffer.decode('utf-8').split('\n', 1)[0].strip()
+
 class Message:
     def __init__(
         self,
@@ -415,7 +428,7 @@ class TXCommServer:
 
         try:
             # Wait for initial handshake: LOGIN|handle|version|color
-            data = client_socket.recv(1024).decode('utf-8').strip()
+            data = recv_line(client_socket)
             parts = data.split('|', 3)
 
             if parts[0] != 'LOGIN' or len(parts) < 3 or len(parts) > 4 or not parts[1]:
@@ -456,7 +469,7 @@ class TXCommServer:
             client_socket.send(f"READY|{user_handle}|Logged in as {user_handle}. You are in the lobby.\n".encode('utf-8'))
 
             while True:
-                data = client_socket.recv(1024).decode('utf-8').strip()
+                data = recv_line(client_socket)
                 if not data:
                     break
 
@@ -560,7 +573,7 @@ class TXCommServer:
                     )
 
                 elif data.startswith('SAY|'):
-                    message_text = data[4:]
+                    message_text = decode_field(data[4:])
                     active_chatroom = None
                     with self.lock:
                         session = self.sessions.get(client_id)
