@@ -493,11 +493,11 @@ class TXCommServer:
                     break
 
                 if data.startswith('JOIN|'):
-                    requested_chatroom = data[5:].strip()
+                    requested_chatroom = data[5:].strip().lower()
                     if not requested_chatroom:
                         client_socket.send(b"ERROR|Memo name cannot be empty\n")
                         continue
-                    if requested_chatroom.lower() == "lobby":
+                    if requested_chatroom == "lobby":
                         client_socket.send(b"ERROR|Memo name 'lobby' is reserved\n")
                         continue
 

@@ -558,9 +558,9 @@ class TXCommClient:
                             continue
 
                         if user_input.lower() == '/join' or user_input.lower().startswith('/join '):
-                            memo_name = user_input[6:].strip()
+                            memo_name = user_input[6:].strip().lower()
                             if memo_name:
-                                if memo_name.lower() == "lobby":
+                                if memo_name == "lobby":
                                     with self.lock:
                                         self.messages.append(("SYSTEM", "Error: Memo name 'lobby' is reserved", time.time(), "red", True))
                                     self.draw_screen()
