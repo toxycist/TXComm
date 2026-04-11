@@ -511,6 +511,15 @@ class TXCommServer:
                         client_socket.send(f"INFO|You are already in memo: {requested_chatroom}\n".encode('utf-8'))
                         continue
 
+                    chatroom = self.get_or_create_chatroom(requested_chatroom)
+                    chatroom.add_user(user_handle)
+                    chatroom_name = requested_chatroom
+
+                    with self.lock:
+                            session = self.sessions.get(client_id)
+                            if session:
+                                session["chatroom"] = chatroom_name
+
                     if previous_chatroom:
                         old_chatroom = self.chatrooms.get(previous_chatroom)
                         if old_chatroom:
@@ -525,17 +534,8 @@ class TXCommServer:
                         self.log_event(
                             f"{self.colorize_handle(user_handle, user_color)} left memo {previous_chatroom}"
                         )
-                        self.broadcast_users_list(previous_chatroom)
 
-                    chatroom = self.get_or_create_chatroom(requested_chatroom)
-                    chatroom.add_user(user_handle)
-                    chatroom_name = requested_chatroom
-
-                    with self.lock:
-                        session = self.sessions.get(client_id)
-                        if session:
-                            session["chatroom"] = chatroom_name
-                    self.broadcast_users_list(None)
+                    self.broadcast_users_list(previous_chatroom)
 
                     recent = chatroom.get_recent_messages(20)
                     for msg in recent:
