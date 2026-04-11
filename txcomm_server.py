@@ -441,7 +441,6 @@ class TXCommServer:
         client_id = f"{addr[0]}:{addr[1]}"
         user_handle = None
         authenticated = False
-        chatroom_name = None
         recv_buffer = ""
 
         try:
@@ -513,12 +512,11 @@ class TXCommServer:
 
                     chatroom = self.get_or_create_chatroom(requested_chatroom)
                     chatroom.add_user(user_handle)
-                    chatroom_name = requested_chatroom
 
                     with self.lock:
-                            session = self.sessions.get(client_id)
-                            if session:
-                                session["chatroom"] = chatroom_name
+                        session = self.sessions.get(client_id)
+                        if session:
+                            session["chatroom"] = requested_chatroom
 
                     if previous_chatroom:
                         old_chatroom = self.chatrooms.get(previous_chatroom)
@@ -546,11 +544,11 @@ class TXCommServer:
                         client_socket.send(
                             f"MSG|{enc_handle}|{enc_text}|{msg.timestamp}|{enc_color}|{system_bit}\n".encode('utf-8')
                         )
-                    client_socket.send(f"JOINED|{chatroom_name}\n".encode('utf-8'))
-                    self.emit_system_event(chatroom_name, user_handle, user_color, f"{user_handle} joined the memo")
-                    self.broadcast_users_list(chatroom_name)
+                    client_socket.send(f"JOINED|{requested_chatroom}\n".encode('utf-8'))
+                    self.emit_system_event(requested_chatroom, user_handle, user_color, f"{user_handle} joined the memo")
+                    self.broadcast_users_list(requested_chatroom)
                     self.log_event(
-                        f"{self.colorize_handle(user_handle, user_color)} joined memo {chatroom_name}"
+                        f"{self.colorize_handle(user_handle, user_color)} joined memo {requested_chatroom}"
                     )
 
                 elif data == 'LEAVE':
@@ -565,7 +563,6 @@ class TXCommServer:
                         chatroom = self.chatrooms.get(active_chatroom)
                         if chatroom:
                             chatroom.remove_user(user_handle)
-                        chatroom_name = None
                         self.emit_system_event(active_chatroom, user_handle, user_color, f"{user_handle} left the memo")
                         client_socket.send(b"LEFT|Lobby\n")
                         self.broadcast_users_list(active_chatroom)
@@ -683,7 +680,7 @@ class TXCommServer:
 
             try:
                 client_socket.close()
-            except:
+            except Exception:
                 pass
 
             if authenticated and user_handle:
@@ -721,7 +718,7 @@ class TXCommServer:
         for client_id, sock in connections_to_notify:
             try:
                 sock.send(message.encode('utf-8'))
-            except:
+            except Exception:
                 pass
 
     def start(self):
