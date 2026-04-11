@@ -144,7 +144,7 @@ class Chatroom:
 
 
 class TXCommServer:
-    def __init__(self, host: str = 'localhost', port: int = 1717):
+    def __init__(self, host: str = '0.0.0.0', port: int = 1717):
         self.host = host
         self.port = port
         self.chatrooms: Dict[str, Chatroom] = {}
