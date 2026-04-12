@@ -112,8 +112,8 @@ class Message:
         )
 
 
-class Chatroom:
-    def __init__(self, name: str, data_dir: str = "./chatrooms"):
+class Memo:
+    def __init__(self, name: str, data_dir: str = "./memos"):
         self.name = name
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(exist_ok=True)
@@ -141,18 +141,18 @@ class Chatroom:
             }, f, indent=2)
 
     def add_message(self, handle: str, text: str, color: str = "bright_teal", is_system: bool = False) -> Message:
-        """Add a message to the chatroom"""
+        """Add a message to the memo"""
         msg = Message(handle, text, color=color, is_system=is_system)
         self.messages.append(msg)
         self.save_messages()
         return msg
 
     def add_user(self, handle: str):
-        """Register a user in this chatroom"""
+        """Register a user in this memo"""
         self.users.add(handle)
 
     def remove_user(self, handle: str):
-        """Unregister a user from this chatroom"""
+        """Unregister a user from this memo"""
         self.users.discard(handle)
 
     def get_recent_messages(self, count: int = 50) -> List[Message]:
@@ -164,14 +164,14 @@ class TXCommServer:
     def __init__(self, host: str = '0.0.0.0', port: int = 1717):
         self.host = host
         self.port = port
-        self.chatrooms: Dict[str, Chatroom] = {}
+        self.memos: Dict[str, Memo] = {}
         self.active_connections: Dict[str, socket.socket] = {}
         self.sessions: Dict[str, Dict[str, Optional[str]]] = {}
         self.lock = threading.Lock()
         self.running = False
         self.base_dir = Path(__file__).resolve().parent
         self.server_client_source_path = self.base_dir / "txcomm_client.py"
-        self.chatrooms_dir = self.base_dir / "chatrooms"
+        self.memos_dir = self.base_dir / "memos"
         self.log_file_path = self.base_dir / "log.txt"
         self.update_build_dir = self.base_dir / "clients_updating"
         self.server_client_binary_path = self.update_build_dir / "dist" / "txcomm_client"
@@ -182,17 +182,17 @@ class TXCommServer:
             "red", "green", "blue", "yellow", "pink"
         }
 
-    def get_or_create_chatroom(self, name: str) -> Chatroom:
-        """Get a chatroom or create it if it doesn't exist"""
+    def get_or_create_memo(self, name: str) -> Memo:
+        """Get a memo or create it if it doesn't exist"""
         created = False
         with self.lock:
-            if name not in self.chatrooms:
-                self.chatrooms[name] = Chatroom(name, data_dir=self.chatrooms_dir)
+            if name not in self.memos:
+                self.memos[name] = Memo(name, data_dir=self.memos_dir)
                 created = True
-            chatroom = self.chatrooms[name]
+            memo = self.memos[name]
         if created:
             self.log_event(f"Created memo: {name}")
-        return chatroom
+        return memo
 
     def get_session_color(self, client_id: str) -> str:
         with self.lock:
@@ -254,9 +254,9 @@ class TXCommServer:
     def draw_dashboard(self):
         with self.lock:
             connections = len(self.active_connections)
-            in_memo = sum(1 for session in self.sessions.values() if session.get("chatroom"))
+            in_memo = sum(1 for session in self.sessions.values() if session.get("memo"))
             in_lobby = max(0, connections - in_memo)
-            active_memos = sorted({session.get("chatroom") for session in self.sessions.values() if session.get("chatroom")})
+            active_memos = sorted({session.get("memo") for session in self.sessions.values() if session.get("memo")})
             latest_events = list(self.events)
 
         clear_screen()
@@ -306,27 +306,27 @@ class TXCommServer:
         print(rule('-', Colors.BRIGHT_TEAL))
         print(f"{Colors.BRIGHT_TEAL}  Press Ctrl+C to stop server{Colors.RESET}")
 
-    def list_chatrooms(self) -> List[str]:
-        """Return known chatrooms from memory and persisted files."""
-        names = set(self.chatrooms.keys())
-        if self.chatrooms_dir.exists():
-            for file_path in self.chatrooms_dir.glob("*.json"):
+    def list_memos(self) -> List[str]:
+        """Return known memos from memory and persisted files."""
+        names = set(self.memos.keys())
+        if self.memos_dir.exists():
+            for file_path in self.memos_dir.glob("*.json"):
                 names.add(file_path.stem)
         return sorted(names)
 
     def emit_system_event(
         self,
-        chatroom_name: str,
+        memo_name: str,
         actor_handle: str,
         actor_color: str,
         text: str,
         exclude_client_id: Optional[str] = None
     ):
-        """Persist and broadcast a system message inside a chatroom."""
-        chatroom = self.get_or_create_chatroom(chatroom_name)
-        chatroom.add_message(actor_handle, text, actor_color, is_system=True)
+        """Persist and broadcast a system message inside a memo."""
+        memo = self.get_or_create_memo(memo_name)
+        memo.add_message(actor_handle, text, actor_color, is_system=True)
         self.broadcast_message(
-            chatroom_name,
+            memo_name,
             actor_handle,
             text,
             sender_color=actor_color,
@@ -336,7 +336,7 @@ class TXCommServer:
 
     def broadcast_users_list(
         self,
-        chatroom_name: Optional[str] = None,
+        memo_name: Optional[str] = None,
         mode: str = "header",
         target_client_id: Optional[str] = None
     ):
@@ -345,7 +345,7 @@ class TXCommServer:
                 [
                     (session.get("handle") or "UNKNOWN", session.get("color") or "red")
                     for session in self.sessions.values()
-                    if isinstance(session, dict) and session.get("chatroom") == chatroom_name
+                    if isinstance(session, dict) and session.get("memo") == memo_name
                 ],
                 key=lambda item: item[0].lower()
             )
@@ -354,14 +354,14 @@ class TXCommServer:
             else:
                 targets = [
                     sock for cid, sock in self.active_connections.items()
-                    if cid in self.sessions and self.sessions[cid].get("chatroom") == chatroom_name
+                    if cid in self.sessions and self.sessions[cid].get("memo") == memo_name
                 ]
 
         if mode == "header":
             payload = ";".join(f"{handle}:{color}" for handle, color in users)
             packet = f"USERS|{payload}\n".encode('utf-8')
         elif mode == "message":
-            room_label = chatroom_name if chatroom_name else "lobby"
+            room_label = memo_name if memo_name else "lobby"
             if users:
                 users_text = ", ".join(
                     f"{self.colorize_handle(handle, color)}{Colors.DARK_GRAY}"
@@ -500,7 +500,7 @@ class TXCommServer:
 
             with self.lock:
                 self.active_connections[client_id] = client_socket
-                self.sessions[client_id] = {"handle": user_handle, "chatroom": None, "color": user_color}
+                self.sessions[client_id] = {"handle": user_handle, "memo": None, "color": user_color}
             authenticated = True
             self.log_event(f"{client_id} authenticated as {self.colorize_handle(user_handle, user_color)}")
 
@@ -513,55 +513,55 @@ class TXCommServer:
                     break
 
                 if data.startswith('JOIN|'):
-                    requested_chatroom = data[5:].strip().lower()[:30]
-                    if not requested_chatroom:
+                    requested_memo = data[5:].strip().lower()[:30]
+                    if not requested_memo:
                         client_socket.send(b"ERROR|memo name cannot be empty\n")
                         continue
-                    validation_status = validate_memo_name(requested_chatroom)
+                    validation_status = validate_memo_name(requested_memo)
                     if validation_status != True:
                         error_string = f"ERROR|character {validation_status} is not allowed in memo name\n"
                         client_socket.send(error_string.encode('utf-8'))
                         continue
-                    if requested_chatroom == "lobby":
+                    if requested_memo == "lobby":
                         client_socket.send(b"ERROR|memo name 'lobby' is reserved\n")
                         continue
 
-                    previous_chatroom = None
+                    previous_memo = None
                     with self.lock:
                         session = self.sessions.get(client_id)
                         if session:
-                            previous_chatroom = session.get("chatroom")
+                            previous_memo = session.get("memo")
 
-                    if previous_chatroom == requested_chatroom:
-                        client_socket.send(f"INFO|You are already in memo: {requested_chatroom}\n".encode('utf-8'))
+                    if previous_memo == requested_memo:
+                        client_socket.send(f"INFO|You are already in memo: {requested_memo}\n".encode('utf-8'))
                         continue
 
-                    chatroom = self.get_or_create_chatroom(requested_chatroom)
-                    chatroom.add_user(user_handle)
+                    memo = self.get_or_create_memo(requested_memo)
+                    memo.add_user(user_handle)
 
                     with self.lock:
                         session = self.sessions.get(client_id)
                         if session:
-                            session["chatroom"] = requested_chatroom
+                            session["memo"] = requested_memo
 
-                    if previous_chatroom:
-                        old_chatroom = self.chatrooms.get(previous_chatroom)
-                        if old_chatroom:
-                            old_chatroom.remove_user(user_handle)
+                    if previous_memo:
+                        old_memo = self.memos.get(previous_memo)
+                        if old_memo:
+                            old_memo.remove_user(user_handle)
                         self.emit_system_event(
-                            previous_chatroom,
+                            previous_memo,
                             user_handle,
                             user_color,
                             f"{user_handle} left the memo",
                             exclude_client_id=client_id
                         )
                         self.log_event(
-                            f"{self.colorize_handle(user_handle, user_color)} left memo {previous_chatroom}"
+                            f"{self.colorize_handle(user_handle, user_color)} left memo {previous_memo}"
                         )
 
-                    self.broadcast_users_list(previous_chatroom)
+                    self.broadcast_users_list(previous_memo)
 
-                    recent = chatroom.get_recent_messages(20)
+                    recent = memo.get_recent_messages(20)
                     for msg in recent:
                         system_bit = 1 if msg.is_system else 0
                         enc_handle = encode_field(msg.handle)
@@ -570,48 +570,48 @@ class TXCommServer:
                         client_socket.send(
                             f"MSG|{enc_handle}|{enc_text}|{msg.timestamp}|{enc_color}|{system_bit}\n".encode('utf-8')
                         )
-                    client_socket.send(f"JOINED|{requested_chatroom}\n".encode('utf-8'))
-                    self.emit_system_event(requested_chatroom, user_handle, user_color, f"{user_handle} joined the memo")
-                    self.broadcast_users_list(requested_chatroom)
+                    client_socket.send(f"JOINED|{requested_memo}\n".encode('utf-8'))
+                    self.emit_system_event(requested_memo, user_handle, user_color, f"{user_handle} joined the memo")
+                    self.broadcast_users_list(requested_memo)
                     self.log_event(
-                        f"{self.colorize_handle(user_handle, user_color)} joined memo {requested_chatroom}"
+                        f"{self.colorize_handle(user_handle, user_color)} joined memo {requested_memo}"
                     )
 
                 elif data == 'LEAVE':
-                    active_chatroom = None
+                    active_memo = None
                     with self.lock:
                         session = self.sessions.get(client_id)
                         if session:
-                            active_chatroom = session.get("chatroom")
-                            session["chatroom"] = None
+                            active_memo = session.get("memo")
+                            session["memo"] = None
 
-                    if active_chatroom:
-                        chatroom = self.chatrooms.get(active_chatroom)
-                        if chatroom:
-                            chatroom.remove_user(user_handle)
-                        self.emit_system_event(active_chatroom, user_handle, user_color, f"{user_handle} left the memo")
+                    if active_memo:
+                        memo = self.memos.get(active_memo)
+                        if memo:
+                            memo.remove_user(user_handle)
+                        self.emit_system_event(active_memo, user_handle, user_color, f"{user_handle} left the memo")
                         client_socket.send(b"LEFT|Lobby\n")
-                        self.broadcast_users_list(active_chatroom)
+                        self.broadcast_users_list(active_memo)
                         self.broadcast_users_list(None)
                         self.log_event(
-                            f"{self.colorize_handle(user_handle, user_color)} returned to lobby from {active_chatroom}"
+                            f"{self.colorize_handle(user_handle, user_color)} returned to lobby from {active_memo}"
                         )
                     else:
                         client_socket.send(b"INFO|You are already in the lobby\n")
 
                 elif data == 'MEMOS':
-                    rooms = self.list_chatrooms()
+                    rooms = self.list_memos()
                     payload = ",".join(rooms)
                     client_socket.send(f"MEMOS|{payload}\n".encode('utf-8'))
 
                 elif data == 'HERE':
-                    active_chatroom = None
+                    active_memo = None
                     with self.lock:
                         session = self.sessions.get(client_id)
                         if session:
-                            active_chatroom = session.get("chatroom")
+                            active_memo = session.get("memo")
                     self.broadcast_users_list(
-                        active_chatroom,
+                        active_memo,
                         mode="message",
                         target_client_id=client_id
                     )
@@ -639,27 +639,27 @@ class TXCommServer:
 
                 elif data.startswith('SAY|'):
                     message_text = decode_field(data[4:])
-                    active_chatroom = None
+                    active_memo = None
                     with self.lock:
                         session = self.sessions.get(client_id)
                         if session:
-                            active_chatroom = session.get("chatroom")
+                            active_memo = session.get("memo")
 
-                    if not active_chatroom:
+                    if not active_memo:
                         client_socket.send(b"ERROR|Join a memo before sending messages\n")
                         continue
 
-                    chatroom = self.get_or_create_chatroom(active_chatroom)
-                    chatroom.add_message(user_handle, message_text, user_color, is_system=False)
+                    memo = self.get_or_create_memo(active_memo)
+                    memo.add_message(user_handle, message_text, user_color, is_system=False)
                     self.broadcast_message(
-                        active_chatroom,
+                        active_memo,
                         user_handle,
                         message_text,
                         sender_color=user_color,
                         is_system=False
                     )
                     self.log_event(
-                        f"{self.colorize_handle(user_handle, user_color)}@{active_chatroom}: {message_text}"
+                        f"{self.colorize_handle(user_handle, user_color)}@{active_memo}: {message_text}"
                     )
 
                 elif data == 'QUIT':
@@ -679,23 +679,23 @@ class TXCommServer:
             # Cleanup
             disconnect_color = self.get_session_color(client_id)
             if user_handle:
-                active_chatroom = None
+                active_memo = None
                 with self.lock:
                     session = self.sessions.get(client_id)
                     if session:
-                        active_chatroom = session.get("chatroom")
-                        session["chatroom"] = None
+                        active_memo = session.get("memo")
+                        session["memo"] = None
 
-                chatroom = self.chatrooms.get(active_chatroom) if active_chatroom else None
-                if chatroom:
-                    chatroom.remove_user(user_handle)
+                memo = self.memos.get(active_memo) if active_memo else None
+                if memo:
+                    memo.remove_user(user_handle)
                     user_color = "red"
                     with self.lock:
                         session = self.sessions.get(client_id)
                         if session and session.get("color"):
                             user_color = session["color"]
-                    self.emit_system_event(active_chatroom, user_handle, user_color, f"{user_handle} left the memo")
-                    self.broadcast_users_list(active_chatroom)
+                    self.emit_system_event(active_memo, user_handle, user_color, f"{user_handle} left the memo")
+                    self.broadcast_users_list(active_memo)
 
             with self.lock:
                 if client_id in self.active_connections:
@@ -718,20 +718,20 @@ class TXCommServer:
 
     def broadcast_message(
         self,
-        chatroom_name: str,
+        memo_name: str,
         sender_handle: str,
         text: str,
         sender_color: str = "bright_teal",
         is_system: bool = False,
         exclude_client_id: Optional[str] = None
     ):
-        """Broadcast a message to all clients in a chatroom"""
+        """Broadcast a message to all clients in a memo"""
         with self.lock:
             connections_to_notify = [
                 (cid, sock) for cid, sock in self.active_connections.items()
                 if (
                     cid in self.sessions
-                    and self.sessions[cid].get("chatroom") == chatroom_name
+                    and self.sessions[cid].get("memo") == memo_name
                     and cid != exclude_client_id
                 )
             ]

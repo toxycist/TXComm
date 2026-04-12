@@ -98,17 +98,17 @@ def center(text: str, width: int = WIDTH) -> str:
 # ============================================================
 class TXCommClient:
     def __init__(self, host: str = 'localhost', port: int = 1717,
-                 handle: str = 'user', chatroom: str = '', color_name: str = 'blue'):
+                 handle: str = 'user', memo: str = '', color_name: str = 'blue'):
         self.host = host
         self.port = port
         self.handle = handle
-        self.chatroom = chatroom
+        self.memo = memo
         self.color_name = color_name if color_name in USER_PICKABLE_COLORS else 'blue'
         self.socket: Optional[socket.socket] = None
         self.running = False
         self.connected = False
         self.in_lobby = True
-        self.pending_join_memo = chatroom.strip() if chatroom else ''
+        self.pending_join_memo = memo.strip() if memo else ''
         self.online_users: List[Tuple[str, str]] = []
         self.messages: List[Tuple[str, str, float, str, bool]] = []
         self.message_queue = Queue()
@@ -278,7 +278,7 @@ class TXCommClient:
                         info_message = parts[2] if len(parts) > 2 else ""
                         self.message_queue.put(('ready', assigned_handle, info_message))
                     elif msg_type == 'JOINED':
-                        memo_name = parts[1] if len(parts) > 1 else self.chatroom
+                        memo_name = parts[1] if len(parts) > 1 else self.memo
                         self.message_queue.put(('joined', memo_name))
                     elif msg_type == 'LEFT':
                         self.message_queue.put(('left',))
@@ -351,7 +351,7 @@ class TXCommClient:
         else:
             title_line = (
                 f"{Colors.BOLD}{Colors.BRIGHT_TEAL}"
-                f"  {self.chatroom.upper()}  --  logged in as "
+                f"  {self.memo.upper()}  --  logged in as "
                 f"{my_color}{self.handle}{Colors.BRIGHT_TEAL}"
                 f"{Colors.RESET}"
             )
@@ -508,7 +508,7 @@ class TXCommClient:
                             with self.lock:
                                 self.messages.append((self.handle, info, time.time(), self.color_name, True))
                         if self.pending_join_memo:
-                            if self.in_lobby or self.pending_join_memo != self.chatroom:
+                            if self.in_lobby or self.pending_join_memo != self.memo:
                                 with self.lock:
                                     self.messages = []
                             self.join_memo(self.pending_join_memo)
@@ -516,13 +516,13 @@ class TXCommClient:
                         self.draw_screen()
 
                     elif msg[0] == 'joined':
-                        self.chatroom = msg[1]
+                        self.memo = msg[1]
                         self.in_lobby = False
                         self.draw_screen()
 
                     elif msg[0] == 'left':
                         self.in_lobby = True
-                        self.chatroom = ''
+                        self.memo = ''
                         self.online_users = []
                         with self.lock:
                             self.messages = [("SYSTEM", "Returned to lobby", time.time(), "dark_gray", True)]
@@ -602,7 +602,7 @@ class TXCommClient:
                                         self.messages.append(("SYSTEM", f"Error: character {validation_status} is not allowed in memo name", time.time(), "red", True))
                                     self.draw_screen()
                                     continue
-                                if self.in_lobby or memo_name != self.chatroom:
+                                if self.in_lobby or memo_name != self.memo:
                                     with self.lock:
                                         self.messages = []
                                 self.join_memo(memo_name)
@@ -681,7 +681,7 @@ def main():
         or 'user'
     )
 
-    chatroom = (
+    memo = (
         input(
             f"  {Colors.BRIGHT_TEAL}memo{Colors.RESET}           "
             f"{Colors.DARK_GRAY}[leave blank for lobby]{Colors.RESET} {Colors.BRIGHT_TEAL}: {Colors.RESET}"
@@ -706,7 +706,7 @@ def main():
 
     print()
 
-    client = TXCommClient(host=host, port=port, handle=handle, chatroom=chatroom, color_name=color_name)
+    client = TXCommClient(host=host, port=port, handle=handle, memo=memo, color_name=color_name)
     client.run()
 
 
