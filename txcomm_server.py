@@ -109,6 +109,9 @@ class Message:
         )
 
 
+MAX_MEMO_MESSAGES = 200
+
+
 class Memo:
     def __init__(self, name: str, data_dir: str = "./memos"):
         self.name = name
@@ -116,32 +119,42 @@ class Memo:
         self.data_dir.mkdir(exist_ok=True)
         self.messages: List[Message] = []
         self.users: Set[str] = set()
-        self.file_path = self.data_dir / f"{name}.json"
+        self.file_path = self.data_dir / f"{name}.jsonl"
         self.load_messages()
 
     def load_messages(self):
-        """Load chat history from file"""
-        if self.file_path.exists():
-            try:
-                with open(self.file_path, 'r') as f:
-                    data = json.load(f)
-                    self.messages = [Message.from_dict(m) for m in data.get("messages", [])]
-            except:
-                self.messages = []
+        """Load chat history from JSONL file, compacting if oversized."""
+        if not self.file_path.exists():
+            return
+        with open(self.file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        self.messages.append(Message.from_dict(json.loads(line)))
+                    except Exception:
+                        pass  # skip corrupt lines
+        if len(self.messages) > MAX_MEMO_MESSAGES:
+            self.messages = self.messages[-MAX_MEMO_MESSAGES:]
+            self._compact()
 
-    def save_messages(self):
-        """Save chat history to file"""
-        with open(self.file_path, 'w') as f:
-            json.dump({
-                "messages": [m.to_dict() for m in self.messages],
-                "created": self.file_path.stat().st_ctime if self.file_path.exists() else time.time()
-            }, f, indent=2)
+    def _compact(self):
+        """Rewrite the file keeping only the last MAX_MEMO_MESSAGES messages."""
+        self.messages = self.messages[-MAX_MEMO_MESSAGES:]
+        tmp = self.file_path.with_suffix('.tmp')
+        with open(tmp, 'w', encoding='utf-8') as f:
+            for msg in self.messages:
+                f.write(json.dumps(msg.to_dict()) + '\n')
+        os.replace(tmp, self.file_path)
 
     def add_message(self, handle: str, text: str, color: str = "bright_teal", is_system: bool = False) -> Message:
-        """Add a message to the memo"""
+        """Append a message to the memo, compacting if the file gets too large."""
         msg = Message(handle, text, color=color, is_system=is_system)
         self.messages.append(msg)
-        self.save_messages()
+        with open(self.file_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(msg.to_dict()) + '\n')
+        if len(self.messages) > MAX_MEMO_MESSAGES * 1.5:
+            self._compact()
         return msg
 
     def add_user(self, handle: str):

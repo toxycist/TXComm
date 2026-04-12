@@ -50,7 +50,8 @@ USER_PICKABLE_COLORS = {
     "red", "green", "blue", "yellow", "pink"
 }
 
-CLIENT_VERSION = "1.0.14"
+CLIENT_VERSION = "1.0.15"
+MAX_MESSAGES = 200
 
 ALLOWED_MEMO_NAME_CHARACTERS = set(string.ascii_lowercase + string.digits + "_-")
 def validate_memo_name(name: str) -> bool | str:
@@ -111,6 +112,12 @@ class TXCommClient:
         self.messages: List[Tuple[str, str, float, str, bool]] = []
         self.message_queue = Queue()
         self.lock = threading.Lock()
+
+    def _add_message(self, sender: str, text: str, timestamp: float, color: str, is_system: bool):
+        """Append a message and trim to MAX_MESSAGES. Must be called with self.lock held."""
+        self.messages.append((sender, text, timestamp, color, is_system))
+        if len(self.messages) > MAX_MESSAGES:
+            self.messages = self.messages[-MAX_MESSAGES:]
 
     # ----------------------------------------------------------
     # Networking
@@ -269,7 +276,7 @@ class TXCommClient:
                         sender_color = decode_field(parts[4]) if len(parts) > 4 and parts[4] else ""
                         is_system = parts[5] == '1' if len(parts) > 5 else sender == "SYSTEM"
                         with self.lock:
-                            self.messages.append((sender, message, timestamp, sender_color, is_system))
+                            self._add_message(sender, message, timestamp, sender_color, is_system)
                         self.message_queue.put(('refresh',))
                     elif msg_type == 'READY':
                         assigned_handle = parts[1] if len(parts) > 1 else self.handle
@@ -456,7 +463,7 @@ class TXCommClient:
         ]
         with self.lock:
             for line in help_lines:
-                self.messages.append(("SYSTEM", line, time.time(), "dark_gray", True))
+                self._add_message("SYSTEM", line, time.time(), "dark_gray", True)
 
     def quit(self):
         try:
@@ -500,7 +507,7 @@ class TXCommClient:
                         self.handle = assigned_handle
                         if info:
                             with self.lock:
-                                self.messages.append((self.handle, info, time.time(), self.color_name, True))
+                                self._add_message(self.handle, info, time.time(), self.color_name, True)
                         if self.pending_join_memo:
                             if self.in_lobby or self.pending_join_memo != self.memo:
                                 with self.lock:
@@ -530,12 +537,12 @@ class TXCommClient:
                         rooms = msg[1]
                         room_text = ", ".join(rooms) if rooms else "(none yet)"
                         with self.lock:
-                            self.messages.append(("SYSTEM", f"Memos: {room_text}", time.time(), "dark_gray", True))
+                            self._add_message("SYSTEM", f"Memos: {room_text}", time.time(), "dark_gray", True)
                         self.draw_screen()
 
                     elif msg[0] == 'error':
                         with self.lock:
-                            self.messages.append(("SYSTEM", f"Error: {msg[1]}", time.time(), "red", True))
+                            self._add_message("SYSTEM", f"Error: {msg[1]}", time.time(), "red", True)
                         self.draw_screen()
 
                     elif msg[0] == 'info':
@@ -546,7 +553,7 @@ class TXCommClient:
                             info_text = f"{get_color_by_name(info_color)}{handle}{Colors.DARK_GRAY} is online"
                             info_color = "dark_gray"
                         with self.lock:
-                            self.messages.append(("SYSTEM", info_text, time.time(), info_color, True))
+                            self._add_message("SYSTEM", info_text, time.time(), info_color, True)
                         self.draw_screen()
 
                     elif msg[0] == 'input':
@@ -572,7 +579,7 @@ class TXCommClient:
                             target_handle = user_input[8:].strip()
                             if not target_handle:
                                 with self.lock:
-                                    self.messages.append(("SYSTEM", "Usage: /online <handle>", time.time(), "dark_gray", True))
+                                    self._add_message("SYSTEM", "Usage: /online <handle>", time.time(), "dark_gray", True)
                                 self.draw_screen()
                                 continue
                             self.request_online_status(target_handle)
@@ -587,13 +594,13 @@ class TXCommClient:
                             if memo_name:
                                 if memo_name == "lobby":
                                     with self.lock:
-                                        self.messages.append(("SYSTEM", "Error: Memo name 'lobby' is reserved", time.time(), "red", True))
+                                        self._add_message("SYSTEM", "Error: Memo name 'lobby' is reserved", time.time(), "red", True)
                                     self.draw_screen()
                                     continue
                                 validation_status = validate_memo_name(memo_name)
                                 if validation_status != True:
                                     with self.lock:
-                                        self.messages.append(("SYSTEM", f"Error: character {validation_status} is not allowed in memo name", time.time(), "red", True))
+                                        self._add_message("SYSTEM", f"Error: character {validation_status} is not allowed in memo name", time.time(), "red", True)
                                     self.draw_screen()
                                     continue
                                 if self.in_lobby or memo_name != self.memo:
@@ -602,7 +609,7 @@ class TXCommClient:
                                 self.join_memo(memo_name)
                             else:
                                 with self.lock:
-                                    self.messages.append(("SYSTEM", "Usage: /join <memo>", time.time(), "dark_gray", True))
+                                    self._add_message("SYSTEM", "Usage: /join <memo>", time.time(), "dark_gray", True)
                                 self.draw_screen()
                             continue
 
@@ -610,7 +617,7 @@ class TXCommClient:
                             self.send_message(user_input)
                         elif user_input and self.in_lobby:
                             with self.lock:
-                                self.messages.append(("SYSTEM", "Join a memo first: /join <memo>", time.time(), "dark_gray", True))
+                                self._add_message("SYSTEM", "Join a memo first: /join <memo>", time.time(), "dark_gray", True)
 
                         self.draw_screen()
 
