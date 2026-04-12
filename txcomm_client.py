@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Optional, List, Tuple, Dict
 from queue import Queue
 import os
+import hashlib
 
 # ============================================================
 # ANSI color palette
@@ -48,7 +49,7 @@ USER_PICKABLE_COLORS = {
     "red", "green", "blue", "yellow", "pink"
 }
 
-CLIENT_VERSION = "1.0.12"
+CLIENT_VERSION = "1.0.13"
 
 def get_color_by_name(color_name: str, fallback_handle: str = "") -> str:
     if color_name in COLOR_BY_NAME:
@@ -118,7 +119,7 @@ class TXCommClient:
                 print(f"{Colors.BRIGHT_RED}-- Server closed connection during login --{Colors.RESET}")
                 return False
 
-            parts = server_msg.split('|', 3)
+            parts = server_msg.split('|')
             msg_type = parts[0]
 
             if msg_type == 'MISMATCH':
@@ -127,31 +128,52 @@ class TXCommClient:
                 if not server_msg:
                     print(f"{Colors.BRIGHT_RED}-- Server closed connection during update sequence --{Colors.RESET}")
                     return False
-                parts = server_msg.split('|', 3)
+                parts = server_msg.split('|')
                 msg_type = parts[0]
 
             if msg_type == 'READY':
                 assigned_handle = parts[1] if len(parts) > 2 else self.handle
                 ready_text = parts[2] if len(parts) > 2 else (parts[1] if len(parts) > 1 else "")
                 self.message_queue.put(('ready', assigned_handle, ready_text))
-            elif msg_type in ('UPDATE', 'UPDATE_BIN'):
-                if msg_type == 'UPDATE_BIN' and len(parts) != 4:
-                    print(f"{Colors.BRIGHT_RED}-- Invalid update payload from server --{Colors.RESET}")
-                    return False
-                if msg_type == 'UPDATE' and len(parts) != 3:
-                    print(f"{Colors.BRIGHT_RED}-- Invalid update payload from server --{Colors.RESET}")
-                    return False
+            elif msg_type == 'UPDATE_BIN':
                 latest_version = parts[1]
+
                 try:
-                    update_size = int(parts[2] if msg_type == 'UPDATE' else parts[3])
+                    update_size = int(parts[3])
                 except ValueError:
-                    print(f"{Colors.BRIGHT_RED}-- Invalid update size from server --{Colors.RESET}")
+                    print(f"{Colors.BRIGHT_RED}-- Failed receiving update size from the server --{Colors.RESET}")
                     return False
+                
                 update_payload = self._recv_exact(update_size)
                 if update_payload is None:
                     print(f"{Colors.BRIGHT_RED}-- Failed to download update payload --{Colors.RESET}")
                     return False
-                binary_name = "txcomm_client" if msg_type == 'UPDATE' else parts[2]
+                else:
+                    print(f"{Colors.BRIGHT_TEAL}-- Update payload downloaded --{Colors.RESET}")
+
+                try:
+                    checksum_size = int(self._recv_line())
+                except ValueError:
+                    print(f"{Colors.BRIGHT_RED}-- Failed receiving size of file's checksum from the server --{Colors.RESET}")
+                    print(checksum_size)
+                    return False
+
+                checksum = self._recv_exact(checksum_size)
+                if checksum is None:
+                    print(f"{Colors.BRIGHT_RED}-- Failed receiving file checksum from the server --{Colors.RESET}")
+                    return False
+                else:
+                    print(f"{Colors.BRIGHT_TEAL}-- File checksum received --{Colors.RESET}")
+
+                print(f"{Colors.BRIGHT_TEAL}-- Comparing checksums... --{Colors.RESET}")
+                real_cheksum = hashlib.sha256(update_payload).digest()
+                if checksum == real_cheksum:
+                    print(f"{Colors.BRIGHT_TEAL}-- Checksums match --{Colors.RESET}")
+                else:
+                    print(f"{Colors.BRIGHT_RED}-- Checksums do not match --{Colors.RESET}")
+                    return False
+
+                binary_name = parts[2]
                 return self._apply_update_and_restart(latest_version, update_payload, binary_name)
             elif msg_type == 'ERROR':
                 print(f"{Colors.BRIGHT_RED}-- {parts[1] if len(parts) > 1 else 'Server error'} --{Colors.RESET}")
@@ -227,11 +249,11 @@ class TXCommClient:
                     break
                 recv_buffer += chunk.decode('utf-8', errors='replace')
                 while '\n' in recv_buffer:
-                    line, recv_buffer = recv_buffer.split('\n', 1)
+                    line, recv_buffer = recv_buffer.split('\n')
                     line = line.strip()
                     if not line:
                         continue
-                    parts = line.split('|', 5)
+                    parts = line.split('|')
                     msg_type = parts[0]
                     if msg_type == 'MSG':
                         sender    = decode_field(parts[1]) if len(parts) > 1 else "UNKNOWN"

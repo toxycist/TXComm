@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Set, Optional
 import time
+import hashlib
 
 class Colors:
     RESET = '\033[0m'
@@ -26,6 +27,13 @@ class Colors:
     BRIGHT_RED = '\033[91m'
 
 WIDTH = 84
+
+def checksum(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(4096):
+            h.update(chunk)
+    return h.digest()
 
 def rule(char: str = '-', color: str = Colors.BRIGHT_TEAL) -> str:
     return f"{color}{char * WIDTH}{Colors.RESET}"
@@ -472,8 +480,12 @@ class TXCommServer:
                 header = (
                     f"UPDATE_BIN|{latest_version}|{self.server_client_binary_path.name}|{len(payload)}\n"
                 ).encode('utf-8')
+                binary_checksum = checksum(self.server_client_binary_path)
+                binary_checksum_size = (f"{len(binary_checksum)}\n").encode('utf-8')
                 client_socket.send(header)
                 client_socket.send(payload)
+                client_socket.send(binary_checksum_size)
+                client_socket.send(binary_checksum)
                 self.log_event(f"Sent client update to {client_id} ({client_version} -> {latest_version})")
                 return
 

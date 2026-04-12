@@ -5,6 +5,7 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Optional
+import hashlib
 
 INSTALLER_VERSION = "installer"
 INSTALLER_HANDLE = "INSTALLER"
@@ -103,8 +104,8 @@ def prompt_settings():
         f"{Colors.DARK_GRAY}[{default_install}]{Colors.RESET} {Colors.BRIGHT_TEAL}: {Colors.RESET}"
     ).strip()
     launch_now_raw = input(
-        f"  {Colors.BRIGHT_TEAL}launch after install{Colors.RESET} "
-        f"{Colors.DARK_GRAY}[y/n]{Colors.RESET} {Colors.BRIGHT_TEAL}: {Colors.RESET}"
+        f"  {Colors.BRIGHT_TEAL}launch after install(y/n){Colors.RESET} "
+        f"{Colors.DARK_GRAY}[n]{Colors.RESET} {Colors.BRIGHT_TEAL}: {Colors.RESET}"
     ).strip().lower()
 
     try:
@@ -113,7 +114,7 @@ def prompt_settings():
         port = 1717
 
     install_dir = Path(install_raw or default_install).expanduser().resolve()
-    launch_now = launch_now_raw not in ("n", "no")
+    launch_now = launch_now_raw in ("y", "yes")
     return host, port, install_dir, launch_now
 
 
@@ -160,23 +161,48 @@ def main():
             parts = second.split("|", 3)
             msg_type = parts[0]
 
-        if msg_type == "UPDATE_BIN" and len(parts) == 4:
+        if msg_type == "UPDATE_BIN":
             latest_version = parts[1]
             binary_name = parts[2]
-            try:
-                payload_size = int(parts[3])
-            except ValueError:
-                print_error("Invalid update size from server")
-                return
 
-            payload = recv_exact(sock, payload_size)
-            if payload is None:
-                print_error("Failed to receive update payload")
-                return
+            try:
+                update_size = int(parts[3])
+            except ValueError:
+                print(f"{Colors.BRIGHT_RED}-- Failed receiving update size from the server --{Colors.RESET}")
+                return False
+            
+            update_payload = recv_exact(sock, update_size)
+            if update_payload is None:
+                print(f"{Colors.BRIGHT_RED}-- Failed to download update payload --{Colors.RESET}")
+                return False
+            else:
+                print(f"{Colors.BRIGHT_TEAL}-- Update payload downloaded --{Colors.RESET}")
+
+            try:
+                checksum_size = int(recv_line(sock))
+            except ValueError:
+                print(f"{Colors.BRIGHT_RED}-- Failed receiving size of file's checksum from the server --{Colors.RESET}")
+                print(checksum_size)
+                return False
+
+            checksum = recv_exact(sock, checksum_size)
+            if checksum is None:
+                print(f"{Colors.BRIGHT_RED}-- Failed receiving file checksum from the server --{Colors.RESET}")
+                return False
+            else:
+                print(f"{Colors.BRIGHT_TEAL}-- File checksum received --{Colors.RESET}")
+
+            print(f"{Colors.BRIGHT_TEAL}-- Comparing checksums... --{Colors.RESET}")
+            real_cheksum = hashlib.sha256(update_payload).digest()
+            if checksum == real_cheksum:
+                print(f"{Colors.BRIGHT_TEAL}-- Checksums match --{Colors.RESET}")
+            else:
+                print(f"{Colors.BRIGHT_RED}-- Checksums do not match --{Colors.RESET}")
+                return False
 
             print_system(f"Installing TXComm {latest_version}")
             time.sleep(2)
-            target = install_binary(payload, install_dir, binary_name)
+            target = install_binary(update_payload, install_dir, binary_name)
             print_system(f"Installed: {target}")
             time.sleep(2)
 
