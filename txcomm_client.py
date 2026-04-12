@@ -11,6 +11,7 @@ from typing import Optional, List, Tuple, Dict
 from queue import Queue
 import os
 import hashlib
+import string
 
 # ============================================================
 # ANSI color palette
@@ -49,7 +50,15 @@ USER_PICKABLE_COLORS = {
     "red", "green", "blue", "yellow", "pink"
 }
 
-CLIENT_VERSION = "1.0.13"
+CLIENT_VERSION = "1.0.14"
+
+ALLOWED_MEMO_NAME_CHARACTERS = set(string.ascii_lowercase + string.digits + "_-")
+def validate_memo_name(name: str) -> bool | str:
+    for c in name:
+        if c not in ALLOWED_MEMO_NAME_CHARACTERS:
+            return c
+        
+    return True
 
 def get_color_by_name(color_name: str, fallback_handle: str = "") -> str:
     if color_name in COLOR_BY_NAME:
@@ -249,11 +258,11 @@ class TXCommClient:
                     break
                 recv_buffer += chunk.decode('utf-8', errors='replace')
                 while '\n' in recv_buffer:
-                    line, recv_buffer = recv_buffer.split('\n')
+                    line, recv_buffer = recv_buffer.split('\n', 1)
                     line = line.strip()
                     if not line:
                         continue
-                    parts = line.split('|')
+                    parts = line.split('|', 5)
                     msg_type = parts[0]
                     if msg_type == 'MSG':
                         sender    = decode_field(parts[1]) if len(parts) > 1 else "UNKNOWN"
@@ -580,11 +589,17 @@ class TXCommClient:
                             continue
 
                         if user_input.lower() == '/join' or user_input.lower().startswith('/join '):
-                            memo_name = user_input[6:].strip().lower()
+                            memo_name = user_input[6:].strip().lower()[:30]
                             if memo_name:
                                 if memo_name == "lobby":
                                     with self.lock:
                                         self.messages.append(("SYSTEM", "Error: Memo name 'lobby' is reserved", time.time(), "red", True))
+                                    self.draw_screen()
+                                    continue
+                                validation_status = validate_memo_name(memo_name)
+                                if validation_status != True:
+                                    with self.lock:
+                                        self.messages.append(("SYSTEM", f"Error: character {validation_status} is not allowed in memo name", time.time(), "red", True))
                                     self.draw_screen()
                                     continue
                                 if self.in_lobby or memo_name != self.chatroom:

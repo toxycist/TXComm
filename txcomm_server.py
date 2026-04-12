@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Dict, List, Set, Optional
 import time
 import hashlib
+import string
 
 class Colors:
     RESET = '\033[0m'
@@ -27,6 +28,14 @@ class Colors:
     BRIGHT_RED = '\033[91m'
 
 WIDTH = 84
+ALLOWED_MEMO_NAME_CHARACTERS = set(string.ascii_lowercase + string.digits + "_-")
+
+def validate_memo_name(name: str) -> bool | str:
+    for c in name:
+        if c not in ALLOWED_MEMO_NAME_CHARACTERS:
+            return c
+        
+    return True
 
 def checksum(path):
     h = hashlib.sha256()
@@ -504,12 +513,17 @@ class TXCommServer:
                     break
 
                 if data.startswith('JOIN|'):
-                    requested_chatroom = data[5:].strip().lower()
+                    requested_chatroom = data[5:].strip().lower()[:30]
                     if not requested_chatroom:
-                        client_socket.send(b"ERROR|Memo name cannot be empty\n")
+                        client_socket.send(b"ERROR|memo name cannot be empty\n")
+                        continue
+                    validation_status = validate_memo_name(requested_chatroom)
+                    if validation_status != True:
+                        error_string = f"ERROR|character {validation_status} is not allowed in memo name\n"
+                        client_socket.send(error_string.encode('utf-8'))
                         continue
                     if requested_chatroom == "lobby":
-                        client_socket.send(b"ERROR|Memo name 'lobby' is reserved\n")
+                        client_socket.send(b"ERROR|memo name 'lobby' is reserved\n")
                         continue
 
                     previous_chatroom = None
