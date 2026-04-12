@@ -60,12 +60,10 @@ def validate_memo_name(name: str) -> bool | str:
         
     return True
 
-def get_color_by_name(color_name: str, fallback_handle: str = "") -> str:
+def get_color_by_name(color_name: str) -> str:
     if color_name in COLOR_BY_NAME:
         return COLOR_BY_NAME[color_name]
-    if fallback_handle:
-        return Colors.BLUE
-    return Colors.BRIGHT_TEAL
+    return Colors.BLUE
 
 def format_time(timestamp: float) -> str:
     return datetime.fromtimestamp(timestamp).strftime("%H:%M")
@@ -306,8 +304,6 @@ class TXCommClient:
             except Exception:
                 if self.running:
                     break
-        
-        return
 
     def input_loop(self):
         while self.running:
@@ -321,8 +317,6 @@ class TXCommClient:
             except KeyboardInterrupt:
                 self.message_queue.put(('quit',))
                 break
-        
-        return
 
     # ----------------------------------------------------------
     # Drawing
@@ -336,7 +330,7 @@ class TXCommClient:
 
         clear_screen()
 
-        my_color = get_color_by_name(self.color_name, self.handle)
+        my_color = get_color_by_name(self.color_name)
 
         # ── Header ───────────────────────────────────────────────
         print()
@@ -360,7 +354,7 @@ class TXCommClient:
 
         users_count = len(self.online_users)
         users_preview = ", ".join(
-            f"{get_color_by_name(color, handle)}{handle}{Colors.BRIGHT_TEAL}"
+            f"{get_color_by_name(color)}{handle}{Colors.BRIGHT_TEAL}"
             for handle, color in self.online_users[:8]
         )
         if users_count > 8:
@@ -377,7 +371,7 @@ class TXCommClient:
         # ── Message log ──────────────────────────────────────────
         with self.lock:
             for sender, text, timestamp, sender_color_name, is_system in self.messages:
-                sender_color = get_color_by_name(sender_color_name, sender)
+                sender_color = get_color_by_name(sender_color_name)
                 if is_system:
                     if sender != "SYSTEM" and sender and sender in text:
                         formatted = text.replace(
@@ -549,7 +543,7 @@ class TXCommClient:
                         info_color = msg[2] if len(msg) > 2 else "dark_gray"
                         if len(msg) > 2 and info_text.endswith(" is online"):
                             handle = info_text[:-10]
-                            info_text = f"{get_color_by_name(info_color, handle)}{handle}{Colors.DARK_GRAY} is online"
+                            info_text = f"{get_color_by_name(info_color)}{handle}{Colors.DARK_GRAY} is online"
                             info_color = "dark_gray"
                         with self.lock:
                             self.messages.append(("SYSTEM", info_text, time.time(), info_color, True))
@@ -631,7 +625,7 @@ class TXCommClient:
             self.quit()
             print(
                 f"\n{Colors.DARK_GRAY}-- "
-                f"{get_color_by_name(self.color_name, self.handle)}{self.handle}"
+                f"{get_color_by_name(self.color_name)}{self.handle}"
                 f"{Colors.DARK_GRAY} has disconnected. --{Colors.RESET}\n"
             )
             subprocess.run(["stty", "sane"])

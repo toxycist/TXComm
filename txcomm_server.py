@@ -513,7 +513,7 @@ class TXCommServer:
             while True:
                 data, recv_buffer = recv_command(client_socket, recv_buffer)
                 if not data:
-                    break
+                    continue
 
                 if data.startswith('JOIN|'):
                     requested_memo = data[5:].strip().lower()[:30]
