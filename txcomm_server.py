@@ -64,10 +64,7 @@ def recv_command(sock: socket.socket, buffer: str, timeout: float = 0.15) -> tup
 
         ready, _, _ = select.select([sock], [], [], timeout)
         if not ready:
-            if buffer:
-                line, buffer = buffer, ""
-                return line.strip(), buffer
-            continue
+            return None, buffer
 
         chunk = sock.recv(1024)
         if not chunk:
@@ -463,11 +460,17 @@ class TXCommServer:
         try:
             # Wait for initial handshake: LOGIN|handle|version|color
             data, recv_buffer = recv_command(client_socket, recv_buffer)
+
+            if data == None:
+                client_socket.send(b"ERROR|Invalid login handshake - no data received\n")
+                self.log_event(f"Rejected invalid login from {client_id}: no data received")
+                return
+
             parts = data.split('|', 3)
 
             if parts[0] != 'LOGIN' or len(parts) < 3 or len(parts) > 4 or not parts[1]:
-                client_socket.send(b"ERROR|Invalid login handshake\n")
-                self.log_event(f"Rejected invalid login from {client_id}")
+                client_socket.send(b"ERROR|Invalid login handshake - malformed login packet\n")
+                self.log_event(f"Rejected invalid login from {client_id}: malformed login packet")
                 return
 
             requested_handle = parts[1]
