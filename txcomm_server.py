@@ -209,7 +209,7 @@ class TXCommServer:
             session = self.sessions.get(client_id)
             if session and session.get("color"):
                 return session["color"]
-        return "blue"
+        return "red"
 
     def colorize_handle(self, handle: str, color_name: str) -> str:
         color_map = {
@@ -222,7 +222,7 @@ class TXCommServer:
         return f"{color_map.get(color_name, '\033[34m')}{handle}{Colors.BRIGHT_TEAL}"
 
     def normalize_user_color(self, color_name: str) -> str:
-        return color_name if color_name in self.allowed_user_colors else "blue"
+        return color_name if color_name in self.allowed_user_colors else "red"
 
     def normalize_handle(self, requested_handle: str, max_len: int = 25) -> str:
         handle = (requested_handle or "").strip()
@@ -488,7 +488,7 @@ class TXCommServer:
 
             requested_handle = parts[1]
             client_version = parts[2]
-            user_color = self.normalize_user_color(parts[3] if len(parts) == 4 and parts[3] else "blue")
+            user_color = self.normalize_user_color(parts[3] if len(parts) == 4 and parts[3] else "red")
             latest_version = self.get_latest_client_version()
             user_handle = self.resolve_unique_handle(requested_handle)
 
@@ -646,7 +646,7 @@ class TXCommServer:
                             handle = session.get("handle") or ""
                             if handle.lower() == requested.lower():
                                 status_message = f"{handle} is online"
-                                status_color = session.get("color") or "blue"
+                                status_color = session.get("color") or "red"
                                 break
                     if status_message:
                         client_socket.send(f"INFO|{status_message}|{status_color}\n".encode('utf-8'))
