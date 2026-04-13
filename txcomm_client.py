@@ -12,6 +12,7 @@ from queue import Queue
 import os
 import hashlib
 import string
+import re
 
 # ============================================================
 # ANSI color palette
@@ -19,6 +20,7 @@ import string
 class Colors:
     RESET      = '\033[0m'
     BOLD       = '\033[1m'
+    ITALIC     = '\033[3m'
 
     # UI chrome  (teal/slate)
     BRIGHT_TEAL = '\033[96m'
@@ -50,7 +52,7 @@ USER_PICKABLE_COLORS = {
     "red", "green", "blue", "yellow", "pink"
 }
 
-CLIENT_VERSION = "1.0.15"
+CLIENT_VERSION = "1.0.16"
 MAX_MESSAGES = 200
 
 ALLOWED_MEMO_NAME_CHARACTERS = set(string.ascii_lowercase + string.digits + "_-")
@@ -108,7 +110,8 @@ class TXCommClient:
         self.connected = False
         self.in_lobby = True
         self.pending_join_memo = memo.strip() if memo else ''
-        self.online_users: List[Tuple[str, str]] = []
+        self.users_in_this_memo: List[Tuple[str, str]] = []
+        self.mention_handle_colors: Dict[str, str] = {}
         self.messages: List[Tuple[str, str, float, str, bool]] = []
         self.message_queue = Queue()
         self.lock = threading.Lock()
@@ -287,7 +290,7 @@ class TXCommClient:
                         self.message_queue.put(('joined', memo_name))
                     elif msg_type == 'LEFT':
                         self.message_queue.put(('left',))
-                    elif msg_type == 'USERS':
+                    elif msg_type == 'HERE':
                         users: List[Tuple[str, str]] = []
                         if len(parts) > 1 and parts[1]:
                             for item in parts[1].split(';'):
@@ -295,10 +298,15 @@ class TXCommClient:
                                     continue
                                 handle, _, color = item.partition(':')
                                 users.append((handle, color or "red"))
-                        self.message_queue.put(('users', users))
+                        self.message_queue.put(('here', users))
                     elif msg_type == 'MEMOS':
                         rooms = parts[1].split(',') if len(parts) > 1 and parts[1] else []
                         self.message_queue.put(('memos', rooms))
+                    elif msg_type == 'MENTION_COLOR':
+                        handle = parts[1] if len(parts) > 1 else ''
+                        color  = parts[2] if len(parts) > 2 else ''
+                        if handle:
+                            self.mention_handle_colors[handle] = color
                     elif msg_type == 'ERROR':
                         self.message_queue.put(('error', parts[1] if len(parts) > 1 else "Unknown error"))
                     elif msg_type == 'INFO':
@@ -328,6 +336,22 @@ class TXCommClient:
     # ----------------------------------------------------------
     # Drawing
     # ----------------------------------------------------------
+    def colorize_message(self, text: str, base_color = Colors.BRIGHT_TEAL) -> str:
+        """Colorize the user's message, apply user's handle color and replace @handle tokens with the color, fetched from the server."""
+        
+        result = f"{base_color}{text}{Colors.RESET}"
+
+        def replace_mention(m):
+            handle = m.group(1)
+            self.request_mention_color(handle)
+            color = self.mention_handle_colors.get(handle, None)
+            if color:
+                return f"{Colors.RESET}{Colors.ITALIC}{get_color_by_name(color)}@{handle}{Colors.RESET}{base_color}"
+            else:
+                return f"@{handle}"
+
+        return re.sub(r'@(\w+)', replace_mention, result)
+
     def draw_screen(self):
         try:
             import readline
@@ -359,10 +383,10 @@ class TXCommClient:
         print(title_line)
         print(rule('=', Colors.BOLD + Colors.BRIGHT_TEAL))
 
-        users_count = len(self.online_users)
+        users_count = len(self.users_in_this_memo)
         users_preview = ", ".join(
             f"{get_color_by_name(color)}{handle}{Colors.BRIGHT_TEAL}"
-            for handle, color in self.online_users[:8]
+            for handle, color in self.users_in_this_memo[:8]
         )
         if users_count > 8:
             users_preview += f"{Colors.BRIGHT_TEAL}, +{users_count - 8}{Colors.BRIGHT_TEAL}"
@@ -396,9 +420,10 @@ class TXCommClient:
 
                 # [HH:MM] handleName: message text
                 handle_tag = (
-                    f"{handle_color}{Colors.BOLD}{sender}:"
+                    f"{handle_color}{Colors.BOLD}{sender}: {Colors.RESET}"
                 )
-                print(f"{Colors.DARK_GRAY}[{time_str}]{Colors.RESET} {handle_tag} {text}{Colors.RESET}")
+                colored_msg = self.colorize_message(text, base_color = Colors.BOLD + handle_color)
+                print(f"{Colors.DARK_GRAY}[{time_str}]{Colors.RESET} {handle_tag}{colored_msg}{Colors.RESET}")
 
         # ── Input prompt ─────────────────────────────────────────
         print(rule('-', Colors.BOLD + Colors.BRIGHT_TEAL))
@@ -411,6 +436,8 @@ class TXCommClient:
     def send_message(self, text: str):
         if self.connected:
             try:
+                for handle in re.findall(r'@(\w+)', text):
+                    self.request_mention(handle)
                 self.socket.send(f"SAY|{encode_field(text)}\n".encode('utf-8'))
             except Exception:
                 pass
@@ -440,6 +467,20 @@ class TXCommClient:
         if self.connected:
             try:
                 self.socket.send(b"HERE\n")
+            except Exception:
+                pass
+
+    def request_mention_color(self, handle: str):
+        if self.connected and handle:
+            try:
+                self.socket.send(f"MENTION_COLOR|{handle}\n".encode('utf-8'))
+            except Exception:
+                pass
+
+    def request_mention(self, handle: str):
+        if self.connected and handle:
+            try:
+                self.socket.send(f"MENTION|{handle}\n".encode('utf-8'))
             except Exception:
                 pass
 
@@ -524,13 +565,13 @@ class TXCommClient:
                     elif msg[0] == 'left':
                         self.in_lobby = True
                         self.memo = ''
-                        self.online_users = []
+                        self.users_in_this_memo = []
                         with self.lock:
                             self.messages = [("SYSTEM", "Returned to lobby", time.time(), "dark_gray", True)]
                         self.draw_screen()
 
-                    elif msg[0] == 'users':
-                        self.online_users = msg[1]
+                    elif msg[0] == 'here':
+                        self.users_in_this_memo = msg[1]
                         self.draw_screen()
 
                     elif msg[0] == 'memos':

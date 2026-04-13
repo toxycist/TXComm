@@ -211,7 +211,7 @@ class TXCommServer:
                 return session["color"]
         return "red"
 
-    def colorize_handle(self, handle: str, color_name: str) -> str:
+    def colorize_handle(self, handle: str, color_name: str, base_color = Colors.RESET) -> str:
         color_map = {
             "pink": '\033[38;5;213m',
             "yellow": '\033[33m',
@@ -219,7 +219,7 @@ class TXCommServer:
             "red": '\033[31m',
             "blue": '\033[34m',
         }
-        return f"{color_map.get(color_name, '\033[34m')}{handle}{Colors.BRIGHT_TEAL}"
+        return f"{color_map.get(color_name, "red")}{handle}{Colors.RESET}{base_color}"
 
     def normalize_user_color(self, color_name: str) -> str:
         return color_name if color_name in self.allowed_user_colors else "red"
@@ -238,7 +238,7 @@ class TXCommServer:
                 if isinstance(session, dict)
             }
 
-        if base_handle.lower() not in used_handles:
+        if base_handle not in used_handles:
             return base_handle
 
         suffix = 1
@@ -246,7 +246,7 @@ class TXCommServer:
             suffix_text = f"({suffix})"
             trimmed_base = base_handle[:max_len - len(suffix_text)]
             candidate = f"{trimmed_base}{suffix_text}"
-            if candidate.lower() not in used_handles:
+            if candidate not in used_handles:
                 return candidate
             suffix += 1
 
@@ -369,7 +369,7 @@ class TXCommServer:
 
         if mode == "header":
             payload = ";".join(f"{handle}:{color}" for handle, color in users)
-            packet = f"USERS|{payload}\n".encode('utf-8')
+            packet = f"HERE|{payload}\n".encode('utf-8')
         elif mode == "message":
             room_label = memo_name if memo_name else "lobby"
             if users:
@@ -462,11 +462,19 @@ class TXCommServer:
 
         os.chmod(self.server_client_binary_path, 0o755)
         return True
+    
+    def find_user_by_handle(self, handle):
+        for cid, sock in self.active_connections.items():
+            session = self.sessions.get(cid)
+            if session and session.get("handle") == handle:
+                return cid, sock, session
+        return None, None, None
 
     def handle_client(self, client_socket: socket.socket, addr: tuple):
         """Handle a single client connection"""
         client_id = f"{addr[0]}:{addr[1]}"
         user_handle = None
+        user_color = None
         authenticated = False
         recv_buffer = ""
 
@@ -572,7 +580,7 @@ class TXCommServer:
                             exclude_client_id=client_id
                         )
                         self.log_event(
-                            f"{self.colorize_handle(user_handle, user_color)} left memo {previous_memo}"
+                            f"{self.colorize_handle(user_handle, user_color, base_color = Colors.BRIGHT_TEAL)} left memo {previous_memo}"
                         )
 
                     self.broadcast_users_list(previous_memo)
@@ -590,7 +598,7 @@ class TXCommServer:
                     self.emit_system_event(requested_memo, user_handle, user_color, f"{user_handle} joined the memo")
                     self.broadcast_users_list(requested_memo)
                     self.log_event(
-                        f"{self.colorize_handle(user_handle, user_color)} joined memo {requested_memo}"
+                        f"{self.colorize_handle(user_handle, user_color, base_color = Colors.BRIGHT_TEAL)} joined memo {requested_memo}"
                     )
 
                 elif data == 'LEAVE':
@@ -610,7 +618,7 @@ class TXCommServer:
                         self.broadcast_users_list(active_memo)
                         self.broadcast_users_list(None)
                         self.log_event(
-                            f"{self.colorize_handle(user_handle, user_color)} returned to lobby from {active_memo}"
+                            f"{self.colorize_handle(user_handle, user_color, base_color = Colors.BRIGHT_TEAL)} returned to lobby from {active_memo}"
                         )
                     else:
                         client_socket.send(b"INFO|You are already in the lobby\n")
@@ -632,6 +640,56 @@ class TXCommServer:
                         target_client_id=client_id
                     )
 
+                elif data.startswith("MENTION_COLOR|"):
+                    requested = data[14:].strip()
+
+                    if not requested:
+                        client_socket.send(b"ERROR|Invalid mention color request, could not parse the handle\n")
+                        continue
+
+                    with self.lock:
+                        cid, sock, session = self.find_user_by_handle(requested)
+
+                        if session:
+                            color = session.get("color") or "red"
+                            client_socket.send(f"MENTION_COLOR|{requested}|{color}\n".encode())
+                        else:
+                            client_socket.send(f"MENTION_COLOR|{requested}|\n".encode())
+
+
+                elif data.startswith("MENTION|"):
+                    requested = data[8:].strip()
+
+                    if not requested:
+                        client_socket.send(b"ERROR|Invalid mention request, could not parse the handle\n")
+                        continue
+
+                    with self.lock:
+                        cid, sock, session = self.find_user_by_handle(requested)
+
+                        if session:
+                            mentioner_session = self.sessions.get(client_id)
+                            mentioner_memo = mentioner_session["memo"]
+
+                            color = session.get("color") or "red"
+
+                            text = (
+                                f"You were mentioned by "
+                                f"{self.colorize_handle(user_handle, user_color, base_color=Colors.DARK_GRAY)} "
+                                f"in memo {mentioner_memo}"
+                            )
+
+                            packet = f"MSG|SYSTEM|{text}|{time.time()}|dark_gray|1\n".encode()
+
+                            try:
+                                sock.send(packet)
+                            except:
+                                pass
+
+                            client_socket.send(f"MENTION_COLOR|{requested}|{color}\n".encode())
+                        else:
+                            client_socket.send(f"MENTION_COLOR|{requested}|\n".encode())
+
                 elif data.startswith('ONLINE|'):
                     requested = data[7:].strip()
                     if not requested:
@@ -644,7 +702,7 @@ class TXCommServer:
                             if not isinstance(session, dict):
                                 continue
                             handle = session.get("handle") or ""
-                            if handle.lower() == requested.lower():
+                            if handle == requested:
                                 status_message = f"{handle} is online"
                                 status_color = session.get("color") or "red"
                                 break
@@ -675,7 +733,7 @@ class TXCommServer:
                         is_system=False
                     )
                     self.log_event(
-                        f"{self.colorize_handle(user_handle, user_color)}@{active_memo}: {message_text}"
+                        f"{self.colorize_handle(user_handle, user_color, base_color = Colors.BRIGHT_TEAL)}@{active_memo}: {message_text}"
                     )
 
                 elif data == 'QUIT':
@@ -686,7 +744,7 @@ class TXCommServer:
         except Exception as e:
             if user_handle:
                 self.log_event(
-                    f"Error for {self.colorize_handle(user_handle, self.get_session_color(client_id))}({client_id}): {e}"
+                    f"Error for {self.colorize_handle(user_handle, self.get_session_color(client_id), base_color = Colors.BRIGHT_TEAL)}({client_id}): {e}"
                 )
             else:
                 self.log_event(f"Error for {client_id}: {e}")
@@ -705,11 +763,6 @@ class TXCommServer:
                 memo = self.memos.get(active_memo) if active_memo else None
                 if memo:
                     memo.remove_user(user_handle)
-                    user_color = "red"
-                    with self.lock:
-                        session = self.sessions.get(client_id)
-                        if session and session.get("color"):
-                            user_color = session["color"]
                     self.emit_system_event(active_memo, user_handle, user_color, f"{user_handle} left the memo")
                     self.broadcast_users_list(active_memo)
 
@@ -727,7 +780,7 @@ class TXCommServer:
 
             if authenticated and user_handle:
                 self.log_event(
-                    f"{self.colorize_handle(user_handle, disconnect_color)} disconnected"
+                    f"{self.colorize_handle(user_handle, disconnect_color, base_color = Colors.BRIGHT_TEAL)} disconnected"
                 )
             else:
                 self.log_event(f"{client_id} disconnected")
