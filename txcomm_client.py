@@ -133,17 +133,17 @@ class TXCommClient:
 
             server_msg = self._recv_line()
             if not server_msg:
-                print(f"{Colors.BRIGHT_RED}-- Server closed connection during login --{Colors.RESET}")
+                print(f"{Colors.BRIGHT_RED}-- server closed connection during login --{Colors.RESET}")
                 return False
 
             parts = server_msg.split('|')
             msg_type = parts[0]
 
             if msg_type == 'MISMATCH':
-                print(f"{Colors.BRIGHT_TEAL}-- Client version mismatch. Initiating the update sequence --{Colors.RESET}")
+                print(f"{Colors.BRIGHT_TEAL}-- client version mismatch. initiating the update sequence --{Colors.RESET}")
                 server_msg = self._recv_line()
                 if not server_msg:
-                    print(f"{Colors.BRIGHT_RED}-- Server closed connection during update sequence --{Colors.RESET}")
+                    print(f"{Colors.BRIGHT_RED}-- server closed connection during update sequence --{Colors.RESET}")
                     return False
                 parts = server_msg.split('|')
                 msg_type = parts[0]
@@ -158,51 +158,51 @@ class TXCommClient:
                 try:
                     update_size = int(parts[3])
                 except ValueError:
-                    print(f"{Colors.BRIGHT_RED}-- Failed receiving update size from the server --{Colors.RESET}")
+                    print(f"{Colors.BRIGHT_RED}-- failed receiving update size from the server --{Colors.RESET}")
                     return False
                 
                 update_payload = self._recv_exact(update_size)
                 if update_payload is None:
-                    print(f"{Colors.BRIGHT_RED}-- Failed to download update payload --{Colors.RESET}")
+                    print(f"{Colors.BRIGHT_RED}-- failed to download update payload --{Colors.RESET}")
                     return False
                 else:
-                    print(f"{Colors.BRIGHT_TEAL}-- Update payload downloaded --{Colors.RESET}")
+                    print(f"{Colors.BRIGHT_TEAL}-- update payload downloaded --{Colors.RESET}")
 
                 try:
                     checksum_size = int(self._recv_line())
                 except ValueError:
-                    print(f"{Colors.BRIGHT_RED}-- Failed receiving size of file's checksum from the server --{Colors.RESET}")
+                    print(f"{Colors.BRIGHT_RED}-- failed receiving size of file checksum from the server --{Colors.RESET}")
                     print(checksum_size)
                     return False
 
                 checksum = self._recv_exact(checksum_size)
                 if checksum is None:
-                    print(f"{Colors.BRIGHT_RED}-- Failed receiving file checksum from the server --{Colors.RESET}")
+                    print(f"{Colors.BRIGHT_RED}-- failed receiving file checksum from the server --{Colors.RESET}")
                     return False
                 else:
-                    print(f"{Colors.BRIGHT_TEAL}-- File checksum received --{Colors.RESET}")
+                    print(f"{Colors.BRIGHT_TEAL}-- file checksum received --{Colors.RESET}")
 
-                print(f"{Colors.BRIGHT_TEAL}-- Comparing checksums... --{Colors.RESET}")
+                print(f"{Colors.BRIGHT_TEAL}-- comparing checksums... --{Colors.RESET}")
                 real_cheksum = hashlib.sha256(update_payload).digest()
                 if checksum == real_cheksum:
-                    print(f"{Colors.BRIGHT_TEAL}-- Checksums match --{Colors.RESET}")
+                    print(f"{Colors.BRIGHT_TEAL}-- checksums match --{Colors.RESET}")
                 else:
-                    print(f"{Colors.BRIGHT_RED}-- Checksums do not match --{Colors.RESET}")
+                    print(f"{Colors.BRIGHT_RED}-- checksums do not match --{Colors.RESET}")
                     return False
 
                 binary_name = parts[2]
                 return self._apply_update_and_restart(latest_version, update_payload, binary_name)
             elif msg_type == 'ERROR':
-                print(f"{Colors.BRIGHT_RED}-- {parts[1] if len(parts) > 1 else 'Server error'} --{Colors.RESET}")
+                print(f"{Colors.BRIGHT_RED}-- {parts[1] if len(parts) > 1 else 'server error'} --{Colors.RESET}")
                 return False
             else:
-                print(f"{Colors.BRIGHT_RED}-- Unexpected server response: {msg_type} --{Colors.RESET}")
+                print(f"{Colors.BRIGHT_RED}-- unexpected server response: {msg_type} --{Colors.RESET}")
                 return False
 
             self.connected = True
             return True
         except Exception as e:
-            print(f"{Colors.BRIGHT_RED}-- Error connecting to server: {e} --{Colors.RESET}")
+            print(f"{Colors.BRIGHT_RED}-- error connecting to server: {e} --{Colors.RESET}")
             return False
 
     def _recv_line(self) -> Optional[str]:
@@ -238,13 +238,13 @@ class TXCommClient:
             target_path = Path(__file__).resolve().with_name(binary_name)
         temp_path = target_path.with_suffix(target_path.suffix + ".new")
         try:
-            print(f"{Colors.BRIGHT_TEAL}-- Updating client {CLIENT_VERSION} -> {latest_version} --{Colors.RESET}")
+            print(f"{Colors.BRIGHT_TEAL}-- updating client {CLIENT_VERSION} -> {latest_version} --{Colors.RESET}")
             time.sleep(2)
             with open(temp_path, 'wb') as f:
                 f.write(payload)
             os.chmod(temp_path, 0o755)
             os.replace(temp_path, target_path)
-            print(f"{Colors.BRIGHT_TEAL}-- Update installed. Restarting client... --{Colors.RESET}")
+            print(f"{Colors.BRIGHT_TEAL}-- update installed. restarting client... --{Colors.RESET}")
             time.sleep(2)
             os.execv(str(target_path), [str(target_path)] + sys.argv[1:])
             return False
@@ -254,7 +254,7 @@ class TXCommClient:
                     temp_path.unlink()
             except Exception:
                 pass
-            print(f"{Colors.BRIGHT_RED}-- Failed to apply update: {e}{Colors.RESET}")
+            print(f"{Colors.BRIGHT_RED}-- failed to apply update: {e}{Colors.RESET}")
             return False
 
     def receive_loop(self):
@@ -308,7 +308,7 @@ class TXCommClient:
                         if handle:
                             self.mention_handle_colors[handle] = color
                     elif msg_type == 'ERROR':
-                        self.message_queue.put(('error', parts[1] if len(parts) > 1 else "Unknown error"))
+                        self.message_queue.put(('error', parts[1] if len(parts) > 1 else "unknown error"))
                     elif msg_type == 'INFO':
                         info_text = parts[1] if len(parts) > 1 else ""
                         info_color = parts[2] if len(parts) > 2 and parts[2] else "dark_gray"
@@ -493,14 +493,15 @@ class TXCommClient:
 
     def add_help_messages(self):
         help_lines = [
-            "Commands:",
-            "/help - Show this help message",
-            "/join <memo> - Join or create a memo",
-            "/leave (/l) - Leave current memo and return to lobby",
-            "/memos - List available memos",
-            "/here - List users in your current memo",
-            "/online <handle> - Check if a user is online",
-            "/quit (/q) - Disconnect and exit"
+            "commands:",
+            "/help - show this help message",
+            "/join <memo> - join or create a memo",
+            "/leave (/l) - leave current memo and return to lobby",
+            "/memos - list available memos",
+            "/here - list users in your current memo",
+            "@<handle> - mention a user from any memo. they will be notified",
+            "/online <handle> - check if a user is online",
+            "/quit (/q) - disconnect and exit"
         ]
         with self.lock:
             for line in help_lines:
@@ -567,7 +568,7 @@ class TXCommClient:
                         self.memo = ''
                         self.users_in_this_memo = []
                         with self.lock:
-                            self.messages = [("SYSTEM", "Returned to lobby", time.time(), "dark_gray", True)]
+                            self.messages = [("SYSTEM", "returned to lobby", time.time(), "dark_gray", True)]
                         self.draw_screen()
 
                     elif msg[0] == 'here':
@@ -578,12 +579,12 @@ class TXCommClient:
                         rooms = msg[1]
                         room_text = ", ".join(rooms) if rooms else "(none yet)"
                         with self.lock:
-                            self._add_message("SYSTEM", f"Memos: {room_text}", time.time(), "dark_gray", True)
+                            self._add_message("SYSTEM", f"memos: {room_text}", time.time(), "dark_gray", True)
                         self.draw_screen()
 
                     elif msg[0] == 'error':
                         with self.lock:
-                            self._add_message("SYSTEM", f"Error: {msg[1]}", time.time(), "red", True)
+                            self._add_message("SYSTEM", f"error: {msg[1]}", time.time(), "red", True)
                         self.draw_screen()
 
                     elif msg[0] == 'info':
@@ -620,7 +621,7 @@ class TXCommClient:
                             target_handle = user_input[8:].strip()
                             if not target_handle:
                                 with self.lock:
-                                    self._add_message("SYSTEM", "Usage: /online <handle>", time.time(), "dark_gray", True)
+                                    self._add_message("SYSTEM", "usage: /online <handle>", time.time(), "dark_gray", True)
                                 self.draw_screen()
                                 continue
                             self.request_online_status(target_handle)
@@ -635,13 +636,13 @@ class TXCommClient:
                             if memo_name:
                                 if memo_name == "lobby":
                                     with self.lock:
-                                        self._add_message("SYSTEM", "Error: Memo name 'lobby' is reserved", time.time(), "red", True)
+                                        self._add_message("SYSTEM", "error: memo name 'lobby' is reserved", time.time(), "red", True)
                                     self.draw_screen()
                                     continue
                                 validation_status = validate_memo_name(memo_name)
                                 if validation_status != True:
                                     with self.lock:
-                                        self._add_message("SYSTEM", f"Error: character {validation_status} is not allowed in memo name", time.time(), "red", True)
+                                        self._add_message("SYSTEM", f"error: character {validation_status} is not allowed in memo name", time.time(), "red", True)
                                     self.draw_screen()
                                     continue
                                 if self.in_lobby or memo_name != self.memo:
@@ -650,7 +651,7 @@ class TXCommClient:
                                 self.join_memo(memo_name)
                             else:
                                 with self.lock:
-                                    self._add_message("SYSTEM", "Usage: /join <memo>", time.time(), "dark_gray", True)
+                                    self._add_message("SYSTEM", "usage: /join <memo>", time.time(), "dark_gray", True)
                                 self.draw_screen()
                             continue
 
@@ -658,7 +659,7 @@ class TXCommClient:
                             self.send_message(user_input)
                         elif user_input and self.in_lobby:
                             with self.lock:
-                                self._add_message("SYSTEM", "Join a memo first: /join <memo>", time.time(), "dark_gray", True)
+                                self._add_message("SYSTEM", "join a memo first: /join <memo>", time.time(), "dark_gray", True)
 
                         self.draw_screen()
 
@@ -697,7 +698,7 @@ def main():
     )
     print(rule('=', Colors.BOLD + Colors.BRIGHT_TEAL))
     print()
-    print(f"{Colors.DARK_GRAY}-- Enter connection settings --{Colors.RESET}")
+    print(f"{Colors.DARK_GRAY}-- enter connection settings --{Colors.RESET}")
     print()
 
     host_input = input(
@@ -731,7 +732,7 @@ def main():
     )
 
     print()
-    print(f"{Colors.DARK_GRAY}-- Choose handle color --{Colors.RESET}")
+    print(f"{Colors.DARK_GRAY}-- choose handle color --{Colors.RESET}")
     color_options = [
         "red", "green", "blue", "yellow", "pink"
     ]
@@ -756,6 +757,6 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print(f"\n{Colors.BRIGHT_RED}-- Interrupted by user --{Colors.RESET}")
+        print(f"\n{Colors.BRIGHT_RED}-- interrupted by user --{Colors.RESET}")
         subprocess.run(["stty", "sane"])
         raise SystemExit(0)

@@ -64,14 +64,10 @@ def recv_exact(sock: socket.socket, size: int) -> Optional[bytes]:
 def install_binary(payload: bytes, install_dir: Path, binary_name: str) -> Path:
     target = install_dir / binary_name
     temp = target.with_suffix(target.suffix + ".new")
-    backup = target.with_suffix(target.suffix + ".bak")
-
     with open(temp, "wb") as f:
         f.write(payload)
     os.chmod(temp, 0o755)
 
-    if target.exists():
-        os.replace(target, backup)
     os.replace(temp, target)
     return target
 
@@ -87,7 +83,7 @@ def prompt_settings():
     )
     print(rule('=', Colors.BOLD + Colors.BRIGHT_TEAL))
     print()
-    print(f"{Colors.DARK_GRAY}-- Enter installation settings --{Colors.RESET}")
+    print(f"{Colors.DARK_GRAY}-- enter installation settings --{Colors.RESET}")
     print()
 
     host = input(
@@ -122,22 +118,22 @@ def main():
     host, port, install_dir, launch_now = prompt_settings()
     if not install_dir.exists():
         print()
-        print_error(f"Install directory does not exist: {install_dir}")
+        print_error(f"install directory does not exist: {install_dir}")
         return
     if not install_dir.is_dir():
         print()
-        print_error(f"Install path is not a directory: {install_dir}")
+        print_error(f"install path is not a directory: {install_dir}")
         return
     if not os.access(install_dir, os.W_OK):
         print()
-        print_error(f"No write permission for install directory: {install_dir}")
+        print_error(f"no write permission for install directory: {install_dir}")
         return
     if not os.access(install_dir, os.X_OK):
         print()
-        print_error(f"No execute permission for install directory: {install_dir}")
+        print_error(f"no execute permission for install directory: {install_dir}")
         return
     print()
-    print_system(f"Connecting to {host}:{port}")
+    print_system(f"connecting to {host}:{port}")
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect((host, port))
@@ -145,18 +141,18 @@ def main():
 
         first = recv_line(sock)
         if not first:
-            print_error("Server closed connection")
+            print_error("server closed connection")
             return
 
         parts = first.split("|", 3)
         msg_type = parts[0]
 
         if msg_type == "MISMATCH":
-            print_system("Initiating the update sequence")
+            print_system("initiating the update sequence")
             time.sleep(2)
             second = recv_line(sock)
             if not second:
-                print_error("Server closed connection during update")
+                print_error("server closed connection during update")
                 return
             parts = second.split("|", 3)
             msg_type = parts[0]
@@ -168,59 +164,59 @@ def main():
             try:
                 update_size = int(parts[3])
             except ValueError:
-                print(f"{Colors.BRIGHT_RED}-- Failed receiving update size from the server --{Colors.RESET}")
+                print(f"{Colors.BRIGHT_RED}-- failed receiving update size from the server --{Colors.RESET}")
                 return False
             
             update_payload = recv_exact(sock, update_size)
             if update_payload is None:
-                print(f"{Colors.BRIGHT_RED}-- Failed to download update payload --{Colors.RESET}")
+                print(f"{Colors.BRIGHT_RED}-- failed to download update payload --{Colors.RESET}")
                 return False
             else:
-                print(f"{Colors.BRIGHT_TEAL}-- Update payload downloaded --{Colors.RESET}")
+                print(f"{Colors.BRIGHT_TEAL}-- update payload downloaded --{Colors.RESET}")
 
             try:
                 checksum_size = int(recv_line(sock))
             except ValueError:
-                print(f"{Colors.BRIGHT_RED}-- Failed receiving size of file's checksum from the server --{Colors.RESET}")
+                print(f"{Colors.BRIGHT_RED}-- failed receiving size of file's checksum from the server --{Colors.RESET}")
                 print(checksum_size)
                 return False
 
             checksum = recv_exact(sock, checksum_size)
             if checksum is None:
-                print(f"{Colors.BRIGHT_RED}-- Failed receiving file checksum from the server --{Colors.RESET}")
+                print(f"{Colors.BRIGHT_RED}-- failed receiving file checksum from the server --{Colors.RESET}")
                 return False
             else:
-                print(f"{Colors.BRIGHT_TEAL}-- File checksum received --{Colors.RESET}")
+                print(f"{Colors.BRIGHT_TEAL}-- file checksum received --{Colors.RESET}")
 
-            print(f"{Colors.BRIGHT_TEAL}-- Comparing checksums... --{Colors.RESET}")
+            print(f"{Colors.BRIGHT_TEAL}-- comparing checksums... --{Colors.RESET}")
             real_cheksum = hashlib.sha256(update_payload).digest()
             if checksum == real_cheksum:
-                print(f"{Colors.BRIGHT_TEAL}-- Checksums match --{Colors.RESET}")
+                print(f"{Colors.BRIGHT_TEAL}-- checksums match --{Colors.RESET}")
             else:
-                print(f"{Colors.BRIGHT_RED}-- Checksums do not match --{Colors.RESET}")
+                print(f"{Colors.BRIGHT_RED}-- checksums do not match --{Colors.RESET}")
                 return False
 
-            print_system(f"Installing TXComm {latest_version}")
+            print_system(f"installing txcomm {latest_version}...")
             time.sleep(2)
             target = install_binary(update_payload, install_dir, binary_name)
-            print_system(f"Installed: {target}")
+            print_system(f"installed: {target}")
             time.sleep(2)
 
             if launch_now:
-                print_system("Launching TXComm")
+                print_system("launching txcomm...")
                 time.sleep(2)
                 subprocess.run([str(target)])
             return
 
         if msg_type == "READY":
-            print_system("Server reported no update payload")
+            print_system("server reported no update payload")
             return
 
         if msg_type == "ERROR":
-            print_error(f"Server error: {parts[1] if len(parts) > 1 else 'unknown'}")
+            print_error(f"server error: {parts[1] if len(parts) > 1 else 'unknown'}")
             return
 
-        print_error(f"Unexpected server response: {first}")
+        print_error(f"unexpected server response: {first}")
 
 
 if __name__ == "__main__":
@@ -228,5 +224,5 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print()
-        print_error("Interrupted by user")
+        print_error("interrupted by user")
         raise SystemExit(0)

@@ -201,7 +201,7 @@ class TXCommServer:
                 created = True
             memo = self.memos[name]
         if created:
-            self.log_event(f"Created memo: {name}")
+            self.log_event(f"created memo: {name}")
         return memo
 
     def get_session_color(self, client_id: str) -> str:
@@ -277,16 +277,16 @@ class TXCommServer:
         spacer = " " * max(1, WIDTH - len(title_left) - len(title_right))
         print(f"{Colors.BOLD}{Colors.BRIGHT_TEAL}{title_left}{spacer}{title_right}{Colors.RESET}")
         print(rule('=', Colors.BOLD + Colors.BRIGHT_TEAL))
-        print(f"{Colors.BRIGHT_TEAL}  Host:{Colors.RESET} {self.host}:{self.port}    "
-              f"{Colors.BRIGHT_TEAL}Connections:{Colors.RESET} {connections}    "
-              f"{Colors.BRIGHT_TEAL}In memo:{Colors.RESET} {in_memo}    "
-              f"{Colors.BRIGHT_TEAL}Lobby:{Colors.RESET} {in_lobby}")
+        print(f"{Colors.BRIGHT_TEAL}  host:{Colors.RESET} {self.host}:{self.port}    "
+              f"{Colors.BRIGHT_TEAL}connections:{Colors.RESET} {connections}    "
+              f"{Colors.BRIGHT_TEAL}in memo:{Colors.RESET} {in_memo}    "
+              f"{Colors.BRIGHT_TEAL}in lobby:{Colors.RESET} {in_lobby}")
         if active_memos:
-            print(f"{Colors.BRIGHT_TEAL}  Active memos:{Colors.RESET} {', '.join(active_memos)}")
+            print(f"{Colors.BRIGHT_TEAL}  active memos:{Colors.RESET} {', '.join(active_memos)}")
         else:
-            print(f"{Colors.BRIGHT_TEAL}  Active memos:{Colors.RESET} (none)")
+            print(f"{Colors.BRIGHT_TEAL}  active memos:{Colors.RESET} (none)")
         print(rule('-', Colors.BRIGHT_TEAL))
-        print(f"{Colors.BOLD}{Colors.BRIGHT_TEAL}  Recent events{Colors.RESET}")
+        print(f"{Colors.BOLD}{Colors.BRIGHT_TEAL}  recent events{Colors.RESET}")
         for event in latest_events:
             timestamp_end = event.find(']')
             if event.startswith('[') and timestamp_end != -1:
@@ -314,7 +314,7 @@ class TXCommServer:
                 for line in wrapped:
                     print(f"  {Colors.BRIGHT_TEAL}{line}{Colors.RESET}")
         print(rule('-', Colors.BRIGHT_TEAL))
-        print(f"{Colors.BRIGHT_TEAL}  Press Ctrl+C to stop server{Colors.RESET}")
+        print(f"{Colors.BRIGHT_TEAL}  press ctrl+c to stop server{Colors.RESET}")
 
     def list_memos(self) -> List[str]:
         """Return known memos from memory and persisted files."""
@@ -379,7 +379,7 @@ class TXCommServer:
                 )
             else:
                 users_text = "(none)"
-            text = f"Users in {room_label}: {users_text}"
+            text = f"users in {room_label}: {users_text}"
             packet = f"MSG|SYSTEM|{text}|{time.time()}|dark_gray|1\n".encode('utf-8')
         else:
             return
@@ -413,7 +413,7 @@ class TXCommServer:
         spec_path.mkdir(parents=True, exist_ok=True)
 
         if not self.server_client_source_path.exists():
-            self.log_event("Build failed: txcomm_client.py not found")
+            self.log_event("build failed: txcomm_client.py not found")
             return False
 
         venv_python = self.base_dir / ".venv" / "bin" / "python"
@@ -429,7 +429,7 @@ class TXCommServer:
             if fallback:
                 build_cmd = [fallback]
             else:
-                self.log_event("Build failed: PyInstaller is not available")
+                self.log_event("build failed: pyinstaller is not available")
                 return False
         else:
             build_cmd = [str(pyinstaller_runner), "-m", "PyInstaller"]
@@ -444,7 +444,7 @@ class TXCommServer:
             str(self.server_client_source_path)
         ])
 
-        self.log_event("Building Linux client executable for update")
+        self.log_event("building linux client executable for update")
         build_result = subprocess.run(
             build_cmd,
             capture_output=True,
@@ -453,11 +453,11 @@ class TXCommServer:
         )
         if build_result.returncode != 0:
             err_line = (build_result.stderr or build_result.stdout or "unknown error").splitlines()
-            self.log_event(f"Build failed: {err_line[0] if err_line else 'unknown error'}")
+            self.log_event(f"build failed: {err_line[0] if err_line else 'unknown error'}")
             return False
 
         if not self.server_client_binary_path.exists():
-            self.log_event("Build failed: executable was not produced")
+            self.log_event("build failed: executable was not produced")
             return False
 
         os.chmod(self.server_client_binary_path, 0o755)
@@ -483,15 +483,15 @@ class TXCommServer:
             data, recv_buffer = recv_command(client_socket, recv_buffer)
 
             if data == None:
-                client_socket.send(b"ERROR|Invalid login handshake - no data received\n")
-                self.log_event(f"Rejected invalid login from {client_id}: no data received")
+                client_socket.send(b"ERROR|invalid login handshake - no data received\n")
+                self.log_event(f"rejected invalid login from {client_id}: no data received")
                 return
 
             parts = data.split('|', 3)
 
             if parts[0] != 'LOGIN' or len(parts) < 3 or len(parts) > 4 or not parts[1]:
-                client_socket.send(b"ERROR|Invalid login handshake - malformed login packet\n")
-                self.log_event(f"Rejected invalid login from {client_id}: malformed login packet")
+                client_socket.send(b"ERROR|invalid login handshake - malformed login packet\n")
+                self.log_event(f"rejected invalid login from {client_id}: malformed login packet")
                 return
 
             requested_handle = parts[1]
@@ -503,11 +503,11 @@ class TXCommServer:
             if self.is_version_mismatch(client_version, latest_version):
                 client_socket.send(f"MISMATCH|{client_version}|{latest_version}\n".encode('utf-8'))
                 self.log_event(
-                    f"Version mismatch for {client_id}: {client_version} instead of {latest_version}"
+                    f"version mismatch for {client_id}: {client_version} instead of {latest_version}"
                 )
                 if not self.build_client_binary():
-                    client_socket.send(b"ERROR|Server failed to build txcomm_client executable for update\n")
-                    self.log_event(f"Update failed for {client_id}: build failed")
+                    client_socket.send(b"ERROR|server failed to build txcomm_client executable for update\n")
+                    self.log_event(f"update failed for {client_id}: build failed")
                     return
                 payload = self.server_client_binary_path.read_bytes()
                 header = (
@@ -519,7 +519,7 @@ class TXCommServer:
                 client_socket.send(payload)
                 client_socket.send(binary_checksum_size)
                 client_socket.send(binary_checksum)
-                self.log_event(f"Sent client update to {client_id} ({client_version} -> {latest_version})")
+                self.log_event(f"sent client update to {client_id} ({client_version} -> {latest_version})")
                 return
 
             with self.lock:
@@ -528,7 +528,7 @@ class TXCommServer:
             authenticated = True
             self.log_event(f"{client_id} authenticated as {self.colorize_handle(user_handle, user_color)}")
 
-            client_socket.send(f"READY|{user_handle}|Logged in as {user_handle}. You are in the lobby.\n".encode('utf-8'))
+            client_socket.send(f"READY|{user_handle}|logged in as {user_handle}. you are in the lobby\n".encode('utf-8'))
             self.broadcast_users_list(None)
 
             while True:
@@ -557,7 +557,7 @@ class TXCommServer:
                             previous_memo = session.get("memo")
 
                     if previous_memo == requested_memo:
-                        client_socket.send(f"INFO|You are already in memo: {requested_memo}\n".encode('utf-8'))
+                        client_socket.send(f"INFO|you are already in memo: {requested_memo}\n".encode('utf-8'))
                         continue
 
                     memo = self.get_or_create_memo(requested_memo)
@@ -614,14 +614,14 @@ class TXCommServer:
                         if memo:
                             memo.remove_user(user_handle)
                         self.emit_system_event(active_memo, user_handle, user_color, f"{user_handle} left the memo")
-                        client_socket.send(b"LEFT|Lobby\n")
+                        client_socket.send(b"LEFT|lobby\n")
                         self.broadcast_users_list(active_memo)
                         self.broadcast_users_list(None)
                         self.log_event(
                             f"{self.colorize_handle(user_handle, user_color, base_color = Colors.BRIGHT_TEAL)} returned to lobby from {active_memo}"
                         )
                     else:
-                        client_socket.send(b"INFO|You are already in the lobby\n")
+                        client_socket.send(b"INFO|you are already in the lobby\n")
 
                 elif data == 'MEMOS':
                     rooms = self.list_memos()
@@ -644,7 +644,7 @@ class TXCommServer:
                     requested = data[14:].strip()
 
                     if not requested:
-                        client_socket.send(b"ERROR|Invalid mention color request, could not parse the handle\n")
+                        client_socket.send(b"ERROR|invalid mention color request, could not parse the handle\n")
                         continue
 
                     with self.lock:
@@ -661,7 +661,7 @@ class TXCommServer:
                     requested = data[8:].strip()
 
                     if not requested:
-                        client_socket.send(b"ERROR|Invalid mention request, could not parse the handle\n")
+                        client_socket.send(b"ERROR|invalid mention request, could not parse the handle\n")
                         continue
 
                     with self.lock:
@@ -674,7 +674,7 @@ class TXCommServer:
                             color = session.get("color") or "red"
 
                             text = (
-                                f"You were mentioned by "
+                                f"you were mentioned by "
                                 f"{self.colorize_handle(user_handle, user_color, base_color=Colors.DARK_GRAY)} "
                                 f"in memo {mentioner_memo}"
                             )
@@ -693,7 +693,7 @@ class TXCommServer:
                 elif data.startswith('ONLINE|'):
                     requested = data[7:].strip()
                     if not requested:
-                        client_socket.send(b"ERROR|Usage: /online <handle>\n")
+                        client_socket.send(b"ERROR|usage: /online <handle>\n")
                         continue
                     status_message = None
                     status_color = "dark_gray"
@@ -720,7 +720,7 @@ class TXCommServer:
                             active_memo = session.get("memo")
 
                     if not active_memo:
-                        client_socket.send(b"ERROR|Join a memo before sending messages\n")
+                        client_socket.send(b"ERROR|join a memo before sending messages\n")
                         continue
 
                     memo = self.get_or_create_memo(active_memo)
@@ -739,7 +739,7 @@ class TXCommServer:
                 elif data == 'QUIT':
                     break
                 else:
-                    client_socket.send(b"ERROR|Unknown command\n")
+                    client_socket.send(b"ERROR|unknown command\n")
 
         except Exception as e:
             if user_handle:
@@ -747,7 +747,7 @@ class TXCommServer:
                     f"Error for {self.colorize_handle(user_handle, self.get_session_color(client_id), base_color = Colors.BRIGHT_TEAL)}({client_id}): {e}"
                 )
             else:
-                self.log_event(f"Error for {client_id}: {e}")
+                self.log_event(f"error for {client_id}: {e}")
 
         finally:
             # Cleanup
@@ -824,13 +824,13 @@ class TXCommServer:
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_socket.bind((self.host, self.port))
         server_socket.listen(5)
-        self.log_event(f"Server started on {self.host}:{self.port}")
+        self.log_event(f"server started on {self.host}:{self.port}")
 
         try:
             while self.running:
                 try:
                     client_socket, addr = server_socket.accept()
-                    self.log_event(f"New connection from {addr[0]}:{addr[1]}")
+                    self.log_event(f"new connection from {addr[0]}:{addr[1]}")
                     client_thread = threading.Thread(
                         target=self.handle_client,
                         args=(client_socket, addr),
@@ -842,7 +842,7 @@ class TXCommServer:
         finally:
             server_socket.close()
             self.running = False
-            self.log_event("Server stopped")
+            self.log_event("server stopped")
 
 
 if __name__ == "__main__":
