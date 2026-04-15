@@ -28,11 +28,11 @@ class Colors:
     BRIGHT_RED = '\033[91m'
 
 WIDTH = 84
-ALLOWED_MEMO_NAME_CHARACTERS = set(string.ascii_lowercase + string.digits + "_-")
+ALLOWED_CHARACTERS = set(string.ascii_letters + string.digits + "_-")
 
-def validate_memo_name(name: str) -> bool | str:
+def validate_name(name: str) -> bool | str:
     for c in name:
-        if c not in ALLOWED_MEMO_NAME_CHARACTERS:
+        if c not in ALLOWED_CHARACTERS:
             return c
         
     return True
@@ -224,13 +224,9 @@ class TXCommServer:
     def normalize_user_color(self, color_name: str) -> str:
         return color_name if color_name in self.allowed_user_colors else "red"
 
-    def normalize_handle(self, requested_handle: str, max_len: int = 25) -> str:
-        handle = (requested_handle or "").strip()
-        return handle[:max_len] if handle else "user"
-
     def resolve_unique_handle(self, requested_handle: str) -> str:
         max_len = 25
-        base_handle = self.normalize_handle(requested_handle, max_len=max_len)
+        base_handle = requested_handle.strip()[:25] if requested_handle else "user"
         with self.lock:
             used_handles = {
                 (session.get("handle") or "").lower()
@@ -243,7 +239,7 @@ class TXCommServer:
 
         suffix = 1
         while True:
-            suffix_text = f"({suffix})"
+            suffix_text = f"-{suffix}"
             trimmed_base = base_handle[:max_len - len(suffix_text)]
             candidate = f"{trimmed_base}{suffix_text}"
             if candidate not in used_handles:
@@ -495,6 +491,13 @@ class TXCommServer:
                 return
 
             requested_handle = parts[1]
+
+            validation_status = validate_name(requested_handle)
+            invalid_character_in_handle_error = None
+            if validation_status != True:
+                requested_handle = "user"
+                invalid_character_in_handle_error = f"ERROR|character {validation_status} is not allowed in the handle. your handle was auto-assigned\n"
+
             client_version = parts[2]
             user_color = self.normalize_user_color(parts[3] if len(parts) == 4 and parts[3] else "red")
             latest_version = self.get_latest_client_version()
@@ -529,6 +532,8 @@ class TXCommServer:
             self.log_event(f"{client_id} authenticated as {self.colorize_handle(user_handle, user_color)}")
 
             client_socket.send(f"READY|{user_handle}|logged in as {user_handle}. you are in the lobby\n".encode('utf-8'))
+            if invalid_character_in_handle_error:
+                client_socket.send(invalid_character_in_handle_error.encode('utf-8'))
             self.broadcast_users_list(None)
 
             while True:
@@ -541,7 +546,7 @@ class TXCommServer:
                     if not requested_memo:
                         client_socket.send(b"ERROR|memo name cannot be empty\n")
                         continue
-                    validation_status = validate_memo_name(requested_memo)
+                    validation_status = validate_name(requested_memo)
                     if validation_status != True:
                         error_string = f"ERROR|character {validation_status} is not allowed in memo name\n"
                         client_socket.send(error_string.encode('utf-8'))

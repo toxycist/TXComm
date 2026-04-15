@@ -338,8 +338,6 @@ class TXCommClient:
     # ----------------------------------------------------------
     def colorize_message(self, text: str, base_color = Colors.BRIGHT_TEAL) -> str:
         """Colorize the user's message, apply user's handle color and replace @handle tokens with the color, fetched from the server."""
-        
-        result = f"{base_color}{text}{Colors.RESET}"
 
         def replace_mention(m):
             handle = m.group(1)
@@ -350,7 +348,7 @@ class TXCommClient:
             else:
                 return f"@{handle}"
 
-        return re.sub(r'@(\w+)', replace_mention, result)
+        return f"{base_color}{re.sub(r'(?<!\S)@([\w-]+)', replace_mention, text)}{Colors.RESET}"
 
     def draw_screen(self):
         try:
@@ -436,7 +434,7 @@ class TXCommClient:
     def send_message(self, text: str):
         if self.connected:
             try:
-                for handle in re.findall(r'@(\w+)', text):
+                for handle in re.findall(r'(?<!\S)@([\w-]+)', text):
                     self.request_mention(handle)
                 self.socket.send(f"SAY|{encode_field(text)}\n".encode('utf-8'))
             except Exception:
