@@ -531,7 +531,7 @@ class TXCommServer:
             authenticated = True
             self.log_event(f"{client_id} authenticated as {self.colorize_handle(user_handle, user_color)}")
 
-            client_socket.send(f"READY|{user_handle}|logged in as {user_handle}. you are in the lobby\n".encode('utf-8'))
+            client_socket.send(f"READY|{user_handle}|logged in as {"{handle}"}. you are in the lobby\n".encode('utf-8'))
             if invalid_character_in_handle_error:
                 client_socket.send(invalid_character_in_handle_error.encode('utf-8'))
             self.broadcast_users_list(None)
@@ -581,7 +581,7 @@ class TXCommServer:
                             previous_memo,
                             user_handle,
                             user_color,
-                            f"{user_handle} left the memo",
+                            f"{{handle}} left the memo",
                             exclude_client_id=client_id
                         )
                         self.log_event(
@@ -600,7 +600,7 @@ class TXCommServer:
                             f"MSG|{enc_handle}|{enc_text}|{msg.timestamp}|{enc_color}|{system_bit}\n".encode('utf-8')
                         )
                     client_socket.send(f"JOINED|{requested_memo}\n".encode('utf-8'))
-                    self.emit_system_event(requested_memo, user_handle, user_color, f"{user_handle} joined the memo")
+                    self.emit_system_event(requested_memo, user_handle, user_color, "{handle} joined the memo")
                     self.broadcast_users_list(requested_memo)
                     self.log_event(
                         f"{self.colorize_handle(user_handle, user_color, base_color = Colors.BRIGHT_TEAL)} joined memo {requested_memo}"
@@ -618,7 +618,7 @@ class TXCommServer:
                         memo = self.memos.get(active_memo)
                         if memo:
                             memo.remove_user(user_handle)
-                        self.emit_system_event(active_memo, user_handle, user_color, f"{user_handle} left the memo")
+                        self.emit_system_event(active_memo, user_handle, user_color, "{handle} left the memo")
                         client_socket.send(b"LEFT|lobby\n")
                         self.broadcast_users_list(active_memo)
                         self.broadcast_users_list(None)
@@ -768,7 +768,7 @@ class TXCommServer:
                 memo = self.memos.get(active_memo) if active_memo else None
                 if memo:
                     memo.remove_user(user_handle)
-                    self.emit_system_event(active_memo, user_handle, user_color, f"{user_handle} left the memo")
+                    self.emit_system_event(active_memo, user_handle, user_color, "{handle} left the memo")
                     self.broadcast_users_list(active_memo)
 
             with self.lock:

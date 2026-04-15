@@ -52,7 +52,7 @@ USER_PICKABLE_COLORS = {
     "red", "green", "blue", "yellow", "pink"
 }
 
-CLIENT_VERSION = "1.0.16"
+CLIENT_VERSION = "1.0.17"
 MAX_MESSAGES = 200
 
 ALLOWED_MEMO_NAME_CHARACTERS = set(string.ascii_lowercase + string.digits + "_-")
@@ -402,9 +402,9 @@ class TXCommClient:
             for sender, text, timestamp, sender_color_name, is_system in self.messages:
                 sender_color = get_color_by_name(sender_color_name)
                 if is_system:
-                    if sender != "SYSTEM" and sender and sender in text:
+                    if sender != "SYSTEM" and sender and "{handle}" in text:
                         formatted = text.replace(
-                            sender,
+                            "{handle}",
                             f"{sender_color}{sender}{Colors.DARK_GRAY}"
                         )
                         print(f"{Colors.DARK_GRAY}-- {formatted} --{Colors.RESET}")
